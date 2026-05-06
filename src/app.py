@@ -22,6 +22,24 @@ from .watcher import VIDEO_EXTS, InboxWatcher
 
 log = logging.getLogger(__name__)
 TEMPLATES = Path(__file__).parent / "templates"
+SENSITIVE_CONFIG_MARKERS = (
+    "api_key",
+    "access_key",
+    "secret",
+    "password",
+    "token",
+)
+
+
+def _redact_config(value, key: str = ""):
+    lower_key = key.lower()
+    if any(marker in lower_key for marker in SENSITIVE_CONFIG_MARKERS):
+        return "[redacted]" if value not in (None, "") else value
+    if isinstance(value, dict):
+        return {k: _redact_config(v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_config(v, key) for v in value]
+    return value
 
 
 class CaptionEdit(BaseModel):
@@ -335,9 +353,9 @@ def create_app(
         out = {}
         for p in publishers:
             try:
-                if hasattr(p, "service"):
-                    p.service()
-                if hasattr(p, "token_status"):
+                if hasattr(p, "health"):
+                    out[p.name] = p.health()
+                elif hasattr(p, "token_status"):
                     status = p.token_status()
                     out[p.name] = {"ok": status.get("valid", True), **status}
                 else:
@@ -357,7 +375,6 @@ def create_app(
 
     @app.get("/api/config")
     def get_config():
-        safe = {k: v for k, v in cfg.raw.items() if k != "api_keys"}
-        return JSONResponse(safe)
+        return JSONResponse(_redact_config(cfg.raw))
 
     return app

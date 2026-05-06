@@ -87,8 +87,12 @@ def main() -> int:
         },
         "api_keys": {"anthropic": "x", "openai": "x"},
         "youtube": {"enabled": True},
-        "instagram": {"enabled": False},
-        "tiktok": {"enabled": False},
+        "instagram": {
+            "enabled": False,
+            "access_token": "ig-secret",
+            "resolver": {"secret_access_key": "r2-secret", "access_key_id": "r2-key"},
+        },
+        "tiktok": {"enabled": False, "access_token": "tt-secret"},
         "posting": {"max_per_platform_per_day": 3, "min_minutes_between_posts": 90,
                     "jitter_minutes": 30},
         "captions": {},
@@ -114,6 +118,11 @@ def main() -> int:
                  "/api/errors", "/api/config", "/"]:
         r = client.get(path)
         assert r.status_code == 200, f"{path} -> {r.status_code}: {r.text}"
+
+    config_text = client.get("/api/config").text
+    for secret in ("ig-secret", "tt-secret", "r2-secret", "r2-key"):
+        assert secret not in config_text, f"/api/config leaked {secret}"
+    assert "[redacted]" in config_text
 
     # ── IG token status and refresh (stubbed) ─────────────────────────────────
 

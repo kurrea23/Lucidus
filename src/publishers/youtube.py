@@ -31,6 +31,34 @@ class YouTubePublisher:
         self.made_for_kids = made_for_kids
         self._service = None
 
+    def health(self) -> dict:
+        """Report YouTube setup status without starting the OAuth browser flow."""
+        client_path = Path(self.client_secrets)
+        token_path = Path(self.token_file)
+        if not client_path.exists():
+            return {
+                "ok": False,
+                "setup_required": True,
+                "error": f"missing OAuth client secrets file: {client_path}",
+            }
+        if not token_path.exists():
+            return {
+                "ok": False,
+                "setup_required": True,
+                "error": f"missing OAuth token file: {token_path}",
+            }
+        try:
+            creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+        except Exception as exc:
+            return {"ok": False, "error": f"invalid OAuth token file: {exc}"[:200]}
+        refreshable = bool(creds.expired and creds.refresh_token)
+        return {
+            "ok": bool(creds.valid or refreshable),
+            "token_present": True,
+            "token_expired": bool(creds.expired),
+            "refreshable": refreshable,
+        }
+
     def _credentials(self) -> Credentials:
         creds: Optional[Credentials] = None
         token_path = Path(self.token_file)

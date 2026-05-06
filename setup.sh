@@ -15,7 +15,7 @@ echo "════════════════════════�
 echo ""
 
 # ── Python version ────────────────────────────────────────────────────────────
-PY=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+PY=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 MAJOR=$(echo "$PY" | cut -d. -f1)
 MINOR=$(echo "$PY" | cut -d. -f2)
 if [[ "$MAJOR" -lt 3 || ( "$MAJOR" -eq 3 && "$MINOR" -lt 11 ) ]]; then
@@ -27,7 +27,7 @@ ok "Python $PY"
 if ! command -v ffmpeg &>/dev/null; then
   fail "ffmpeg not found. Install it:\n  macOS:  brew install ffmpeg\n  Ubuntu: sudo apt install ffmpeg"
 fi
-ok "ffmpeg $(ffmpeg -version 2>&1 | head -1 | grep -oP '\d+\.\d+' | head -1)"
+ok "ffmpeg $(ffmpeg -version 2>&1 | awk 'NR==1 {print $3}')"
 
 # ── Virtual environment ───────────────────────────────────────────────────────
 if [[ ! -d .venv ]]; then
@@ -42,7 +42,6 @@ source .venv/bin/activate
 # ── Dependencies ──────────────────────────────────────────────────────────────
 pip install --quiet --upgrade pip
 pip install --quiet -r requirements.txt
-pip install --quiet httpx   # needed by starlette TestClient
 ok "Dependencies installed"
 
 # ── Config ────────────────────────────────────────────────────────────────────
