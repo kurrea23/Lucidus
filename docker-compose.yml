@@ -1,0 +1,22 @@
+services:
+  lucidus:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      # Video folders and database persist on the host.
+      - ./videos:/app/videos
+      - ./data:/app/data
+      # Mount your config and credentials as read-only files.
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+      # YouTube OAuth files (written by the publisher on first run).
+      - ./client_secrets.json:/app/client_secrets.json:ro
+      - ./token.json:/app/token.json
+      # Instagram token file (updated by auto-refresh).
+      - ./ig_token.json:/app/ig_token.json
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Change to 0.0.0.0 in config.yaml when using this compose file,
+    # then pair with a reverse proxy (Traefik/nginx) that terminates TLS.
