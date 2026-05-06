@@ -1,0 +1,42 @@
+paths:
+  inbox: videos/inbox
+  posted: videos/posted
+  failed: videos/failed
+  database: data/metadata.db
+
+api_keys:
+  anthropic: ${ANTHROPIC_API_KEY}
+  openai: ${OPENAI_API_KEY}
+
+youtube:
+  enabled: true
+  client_secrets: client_secrets.json
+  token_file: token.json
+  category_id: "22"
+  privacy_status: public
+  made_for_kids: false
+
+instagram:
+  enabled: false
+  access_token: ${IG_ACCESS_TOKEN}
+  business_account_id: ${IG_BUSINESS_ACCOUNT_ID}
+
+tiktok:
+  enabled: false
+  access_token: ${TIKTOK_ACCESS_TOKEN}
+  open_id: ${TIKTOK_OPEN_ID}
+
+posting:
+  max_per_platform_per_day: 3
+  min_minutes_between_posts: 90
+  jitter_minutes: 30
+
+captions:
+  model: claude-sonnet-4-6
+  max_hashtags: 8
+  style: "engaging, hook-first, no clickbait"
+
+analytics:
+  pull_interval_hours: 6
+  top_performer_percentile: 80
+  repost_delay_days: 10
