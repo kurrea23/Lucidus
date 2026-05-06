@@ -75,6 +75,26 @@ Drop a `.mp4` (or `.mov` / `.webm`) into `videos/inbox/`. Lucidus will:
 5. Pull metrics every `pull_interval_hours`.
 6. Once a video clears `repost_delay_days` and lands in the top `top_performer_percentile`, queue it on other platforms as a repost.
 
+### 6. Cockpit (live dashboard)
+
+When the process is running, the cockpit is served at **http://127.0.0.1:8765** by default.
+
+It shows, live:
+- **KPIs** — inbox count, failed count, total views/likes across platforms
+- **Per-platform card** — active/paused state, queue length, posts today vs daily cap, time since last post, lifetime posts and views
+- **Live feed** — every ingest, queue, post, failure, pause/resume streamed via Server-Sent Events
+- **Recent posts** — caption, platform, latest views/likes/comments, link out
+- **Top performers** — ranked by views, used by the cross-platform reposter
+
+From the cockpit you can:
+- Pause / resume each platform (no posts go out while paused)
+- Force-post the next queued item on a platform (bypasses spacing cap)
+- Trigger an inbox scan immediately
+- Trigger a metrics collection immediately
+- Move everything in `videos/failed/` back to `videos/inbox/` to retry
+
+Change host/port in `config.yaml` under `dashboard:`. To run headless, set `dashboard.enabled: false`.
+
 ## Phase status
 
 - [x] Phase 1: folder watcher + caption pipeline + YouTube + analytics + reposter

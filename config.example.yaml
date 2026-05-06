@@ -40,3 +40,9 @@ analytics:
   pull_interval_hours: 6
   top_performer_percentile: 80
   repost_delay_days: 10
+
+dashboard:
+  enabled: true
+  host: 127.0.0.1
+  port: 8765
+  event_buffer: 500

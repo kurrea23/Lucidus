@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lucidus Cockpit</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14181d;
+    --panel-2: #1a2027;
+    --border: #232a33;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent: #3fb950;
+    --warn: #d29922;
+    --danger: #f85149;
+    --info: #58a6ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #11161c, #0b0d10);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 14px; margin: 0; letter-spacing: 2px; }
+  header h1 .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); margin-right: 8px;
+    box-shadow: 0 0 10px var(--accent);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+  header .meta { color: var(--muted); font-size: 12px; }
+  main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  .grid { display: grid; gap: 12px; }
+  .row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px;
+  }
+  .panel h2 {
+    margin: 0 0 10px; font-size: 11px; letter-spacing: 1.5px;
+    color: var(--muted); text-transform: uppercase; font-weight: 600;
+  }
+  .kpi { display: flex; align-items: baseline; justify-content: space-between; }
+  .kpi .num { font-size: 28px; font-weight: 600; }
+  .kpi .sub { color: var(--muted); font-size: 12px; }
+  .platforms { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .platform {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px;
+  }
+  .platform header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: none; border: none; padding: 0; position: static;
+  }
+  .platform h3 {
+    margin: 0; font-size: 13px; letter-spacing: 1px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+  }
+  .badge.on { background: rgba(63,185,80,.15); color: var(--accent); }
+  .badge.off { background: rgba(248,81,73,.15); color: var(--danger); }
+  .badge.repost { background: rgba(88,166,255,.15); color: var(--info); }
+  .platform .stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0;
+    font-size: 12px;
+  }
+  .platform .stats div { color: var(--muted); }
+  .platform .stats div b { color: var(--text); font-weight: 600; }
+  .platform .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font: inherit; cursor: pointer;
+    transition: background .1s, border-color .1s;
+  }
+  button:hover { background: #1f2731; border-color: #2f3942; }
+  button.primary { border-color: var(--accent); color: var(--accent); }
+  button.warn { border-color: var(--warn); color: var(--warn); }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  .feed {
+    height: 420px; overflow-y: auto; font-size: 12px;
+    background: #07090b; border-radius: 6px; padding: 8px;
+    border: 1px solid var(--border);
+  }
+  .feed .ev { padding: 4px 0; border-bottom: 1px dashed #1a2027; display: grid; grid-template-columns: 80px 130px 1fr; gap: 8px; }
+  .feed .ev:last-child { border-bottom: none; }
+  .feed .ts { color: var(--muted); }
+  .feed .kind { color: var(--info); }
+  .feed .kind.post-success { color: var(--accent); }
+  .feed .kind.post-failed { color: var(--danger); }
+  .feed .kind.platform-paused, .feed .kind.platform-resumed { color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td a { color: var(--info); text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toast {
+    position: fixed; bottom: 16px; right: 16px; padding: 10px 14px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.4); transition: opacity .3s;
+    font-size: 12px;
+  }
+  .toast.hide { opacity: 0; pointer-events: none; }
+  .empty { color: var(--muted); font-style: italic; padding: 12px 0; }
+  .file { font-family: inherit; color: var(--muted); font-size: 12px; }
+  .caption-cell { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <header>
+    <h1><span class="dot"></span>LUCIDUS COCKPIT</h1>
+    <div class="meta" id="meta">connecting…</div>
+  </header>
+
+  <main class="grid">
+
+    <section class="row">
+      <div class="panel">
+        <h2>Inbox</h2>
+        <div class="kpi"><span class="num" id="kpi-inbox">0</span><span class="sub">videos waiting</span></div>
+      </div>
+      <div class="panel">
+        <h2>Failed</h2>
+        <div class="kpi"><span class="num" id="kpi-failed">0</span><span class="sub">need attention</span></div>
+      </div>
+      <div class="panel">
+        <h2>Total views (latest)</h2>
+        <div class="kpi"><span class="num" id="kpi-views">0</span><span class="sub">across platforms</span></div>
+      </div>
+      <div class="panel">
+        <h2>Total likes</h2>
+        <div class="kpi"><span class="num" id="kpi-likes">0</span><span class="sub">across platforms</span></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Platforms</h2>
+      <div class="platforms" id="platforms"></div>
+      <div class="controls" style="margin-top: 12px">
+        <button id="scan">scan inbox now</button>
+        <button id="metrics">collect metrics now</button>
+        <button id="retry" class="warn">retry failed</button>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="panel" style="grid-column: span 2">
+        <h2>Live feed</h2>
+        <div class="feed" id="feed"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Recent posts</h2>
+      <table id="posts"><thead><tr>
+        <th>when</th><th>platform</th><th>caption</th>
+        <th class="num">views</th><th class="num">likes</th><th class="num">comments</th><th>link</th>
+      </tr></thead><tbody></tbody></table>
+    </section>
+
+    <section class="panel">
+      <h2>Top performers (last 60d)</h2>
+      <div id="top"></div>
+    </section>
+
+  </main>
+
+  <div class="toast hide" id="toast"></div>
+
+<script>
+const fmt = {
+  num(n) { return (n || 0).toLocaleString(); },
+  ago(iso) {
+    if (!iso) return "—";
+    const d = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (d < 60) return Math.floor(d) + "s";
+    if (d < 3600) return Math.floor(d / 60) + "m";
+    if (d < 86400) return Math.floor(d / 3600) + "h";
+    return Math.floor(d / 86400) + "d";
+  },
+  ts(iso) {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  },
+};
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.remove("hide");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.add("hide"), 2000);
+}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { method: opts.method || "GET", headers: { "Content-Type": "application/json" }, body: opts.body });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function refresh() {
+  try {
+    const s = await api("/api/stats");
+    document.getElementById("kpi-inbox").textContent = s.inbox.count;
+    document.getElementById("kpi-failed").textContent = s.failed_count;
+
+    let views = 0, likes = 0;
+    Object.values(s.totals || {}).forEach(t => { views += t.views || 0; likes += t.likes || 0; });
+    document.getElementById("kpi-views").textContent = fmt.num(views);
+    document.getElementById("kpi-likes").textContent = fmt.num(likes);
+
+    renderPlatforms(s);
+
+    const posts = await api("/api/posts?limit=25");
+    renderPosts(posts);
+
+    const top = await api("/api/top");
+    renderTop(top);
+
+    document.getElementById("meta").textContent = "live · " + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById("meta").textContent = "error: " + e.message;
+  }
+}
+
+function renderPlatforms(s) {
+  const el = document.getElementById("platforms");
+  el.innerHTML = "";
+  for (const [name, p] of Object.entries(s.platforms || {})) {
+    const t = s.totals[name] || { views: 0, likes: 0, posts: 0 };
+    const div = document.createElement("div");
+    div.className = "platform";
+    const status = p.paused ? `<span class="badge off">paused</span>` : `<span class="badge on">active</span>`;
+    div.innerHTML = `
+      <header>
+        <h3>${name}${status}</h3>
+        <span class="sub" style="color:var(--muted); font-size:11px">queue ${p.queue.length}</span>
+      </header>
+      <div class="stats">
+        <div>today <b>${p.posts_today}/${p.max_per_day}</b></div>
+        <div>last <b>${fmt.ago(p.last_post)}</b></div>
+        <div>posts <b>${t.posts || 0}</b></div>
+        <div>views <b>${fmt.num(t.views)}</b></div>
+      </div>
+      <div class="actions">
+        ${p.paused
+          ? `<button class="primary" data-act="resume" data-p="${name}">resume</button>`
+          : `<button class="warn" data-act="pause" data-p="${name}">pause</button>`}
+        <button data-act="post-now" data-p="${name}" ${p.queue.length === 0 ? "disabled" : ""}>post next</button>
+      </div>
+    `;
+    el.appendChild(div);
+  }
+  el.querySelectorAll("button[data-act]").forEach(b => {
+    b.addEventListener("click", async () => {
+      const p = b.dataset.p;
+      const act = b.dataset.act;
+      try {
+        await api(`/api/platform/${p}/${act}`, { method: "POST" });
+        toast(`${p}: ${act}`);
+        refresh();
+      } catch (e) { toast("error: " + e.message); }
+    });
+  });
+}
+
+function renderPosts(rows) {
+  const tbody = document.querySelector("#posts tbody");
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty">no posts yet</td></tr>`; return; }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${fmt.ago(r.posted_at)}</td>
+      <td>${r.platform}${r.is_repost ? ` <span class="badge repost">repost</span>` : ""}</td>
+      <td class="caption-cell" title="${(r.caption || "").replace(/"/g, "&quot;")}">${r.caption || "—"}</td>
+      <td class="num">${fmt.num(r.views)}</td>
+      <td class="num">${fmt.num(r.likes)}</td>
+      <td class="num">${fmt.num(r.comments)}</td>
+      <td>${r.permalink ? `<a href="${r.permalink}" target="_blank">open</a>` : "—"}</td>
+    </tr>
+  `).join("");
+}
+
+function renderTop(byPlatform) {
+  const el = document.getElementById("top");
+  const all = [];
+  for (const [platform, rows] of Object.entries(byPlatform || {})) {
+    rows.forEach(r => all.push({ platform, ...r }));
+  }
+  if (!all.length) { el.innerHTML = `<div class="empty">need more metrics first</div>`; return; }
+  all.sort((a, b) => b.views - a.views);
+  el.innerHTML = `<table><thead><tr><th>platform</th><th>video</th><th class="num">views</th></tr></thead>
+    <tbody>${all.slice(0, 10).map(r => `
+      <tr><td>${r.platform}</td><td>#${r.video_id}</td><td class="num">${fmt.num(r.views)}</td></tr>
+    `).join("")}</tbody></table>`;
+}
+
+function appendEvent(ev) {
+  const feed = document.getElementById("feed");
+  const div = document.createElement("div");
+  div.className = "ev";
+  const kindClass = ev.kind.replace(/\./g, "-");
+  div.innerHTML = `<span class="ts">${fmt.ts(ev.ts)}</span><span class="kind ${kindClass}">${ev.kind}</span><span>${ev.message}</span>`;
+  feed.insertBefore(div, feed.firstChild);
+  while (feed.children.length > 200) feed.removeChild(feed.lastChild);
+}
+
+const es = new EventSource("/api/events");
+es.onmessage = (e) => {
+  try {
+    const ev = JSON.parse(e.data);
+    appendEvent(ev);
+    if (["post.success", "post.failed", "queue.enqueued", "platform.paused", "platform.resumed"].includes(ev.kind)) {
+      refresh();
+    }
+  } catch (_) {}
+};
+es.onerror = () => { document.getElementById("meta").textContent = "reconnecting…"; };
+
+document.getElementById("scan").addEventListener("click", async () => {
+  await api("/api/scan-now", { method: "POST" }); toast("inbox scanned"); refresh();
+});
+document.getElementById("metrics").addEventListener("click", async () => {
+  await api("/api/collect-metrics", { method: "POST" }); toast("metrics collected"); refresh();
+});
+document.getElementById("retry").addEventListener("click", async () => {
+  const r = await api("/api/retry-failed", { method: "POST" }); toast(`moved ${r.moved} files`); refresh();
+});
+
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>
