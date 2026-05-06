@@ -16,6 +16,7 @@ from .db import DB
 from .events import EventBus
 from .publishers import InstagramPublisher, TikTokPublisher, YouTubePublisher
 from .reposter import CrossPlatformReposter
+from .resolvers import build_resolver
 from .scheduler import PostScheduler
 from .watcher import InboxWatcher, move_to, probe_duration, sha256_file
 from .worker import IngestWorker
@@ -40,10 +41,15 @@ def build_publishers(cfg: Config) -> list:
         ))
     if cfg["instagram"].get("enabled"):
         ig = cfg["instagram"]
+        resolver = build_resolver(ig.get("resolver"))
+        if resolver is None:
+            raise RuntimeError(
+                "instagram.resolver is required. Set type: r2 with bucket and credentials."
+            )
         pubs.append(InstagramPublisher(
             access_token=ig["access_token"],
             business_account_id=ig["business_account_id"],
-            public_url_resolver=None,
+            public_url_resolver=resolver,
         ))
     if cfg["tiktok"].get("enabled"):
         tt = cfg["tiktok"]

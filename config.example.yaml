@@ -20,6 +20,15 @@ instagram:
   enabled: false
   access_token: ${IG_ACCESS_TOKEN}
   business_account_id: ${IG_BUSINESS_ACCOUNT_ID}
+  resolver:
+    type: r2
+    bucket: lucidus-media
+    account_id: ${R2_ACCOUNT_ID}
+    access_key_id: ${R2_ACCESS_KEY_ID}
+    secret_access_key: ${R2_SECRET_ACCESS_KEY}
+    presign_ttl_seconds: 1800
+    key_prefix: lucidus-temp/
+    public_base_url: ""
 
 tiktok:
   enabled: false
