@@ -1,5 +1,4 @@
 import logging
-import random
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -18,6 +17,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class Job:
+    queue_id: int
     video_id: int
     video_path: Path
     caption: str
@@ -33,7 +33,8 @@ class PlatformQueue:
 
 
 class PostScheduler:
-    """Drip-posts jobs to each platform respecting daily caps and min spacing."""
+    """Drip-posts jobs to each platform respecting daily caps and min spacing.
+    Queue is persisted in SQLite so it survives restarts."""
 
     def __init__(
         self,
@@ -53,25 +54,92 @@ class PostScheduler:
         self._lock = Lock()
         self.scheduler = BackgroundScheduler(timezone="UTC")
 
-    def enqueue(self, job: Job, platforms: list[str] | None = None) -> list[str]:
-        queued = []
+    def hydrate_from_db(self) -> int:
+        """Rebuild in-memory queues from the persisted queue table on startup."""
+        rows = self.db.queue_all()
+        loaded = 0
+        for row in rows:
+            platform = row["platform"]
+            if platform not in self.queues:
+                continue
+            path = Path(row["video_path"])
+            if not path.exists():
+                self.db.queue_delete(row["id"])
+                continue
+            self.queues[platform].jobs.append(Job(
+                queue_id=row["id"],
+                video_id=row["video_id"],
+                video_path=path,
+                caption=row["caption"] or "",
+                hashtags=(row["hashtags"] or "").split(),
+                is_repost=bool(row["is_repost"]),
+            ))
+            loaded += 1
+        if loaded:
+            self.events.publish("queue.hydrated", f"restored {loaded} queued jobs from db", count=loaded)
+        return loaded
+
+    def enqueue(self, video_id: int, video_path: Path, caption: str, hashtags: list[str],
+                is_repost: bool = False, platforms: list[str] | None = None) -> list[int]:
+        ids = []
         with self._lock:
             targets = platforms or list(self.queues.keys())
             for p in targets:
                 if p not in self.queues:
                     continue
-                if self.db.video_already_posted(job.video_id, p) and not job.is_repost:
+                if self.db.video_already_posted(video_id, p) and not is_repost:
                     continue
-                self.queues[p].jobs.append(job)
-                queued.append(p)
-        for p in queued:
-            self.events.publish(
-                "queue.enqueued",
-                f"queued video {job.video_id} for {p}",
-                video_id=job.video_id, platform=p, repost=job.is_repost,
-                queue_size=len(self.queues[p].jobs),
-            )
-        return queued
+                qid = self.db.queue_insert(
+                    video_id=video_id, platform=p, video_path=str(video_path),
+                    caption=caption, hashtags=" ".join(hashtags), is_repost=is_repost,
+                )
+                if qid is None:
+                    continue
+                self.queues[p].jobs.append(Job(
+                    queue_id=qid, video_id=video_id, video_path=video_path,
+                    caption=caption, hashtags=list(hashtags), is_repost=is_repost,
+                ))
+                ids.append(qid)
+                self.events.publish(
+                    "queue.enqueued",
+                    f"queued video {video_id} for {p}",
+                    queue_id=qid, video_id=video_id, platform=p, repost=is_repost,
+                    queue_size=len(self.queues[p].jobs),
+                )
+        return ids
+
+    def update_job(self, queue_id: int, caption: str, hashtags: list[str]) -> bool:
+        with self._lock:
+            for q in self.queues.values():
+                for job in q.jobs:
+                    if job.queue_id == queue_id:
+                        job.caption = caption
+                        job.hashtags = list(hashtags)
+                        self.db.queue_update(queue_id, caption, " ".join(hashtags))
+                        self.events.publish("queue.edited", f"edited queued job {queue_id}",
+                                            queue_id=queue_id, caption=caption)
+                        return True
+        return False
+
+    def remove_job(self, queue_id: int) -> bool:
+        with self._lock:
+            for q in self.queues.values():
+                for job in list(q.jobs):
+                    if job.queue_id == queue_id:
+                        q.jobs.remove(job)
+                        self.db.queue_delete(queue_id)
+                        self.events.publish("queue.removed", f"removed queued job {queue_id}",
+                                            queue_id=queue_id)
+                        return True
+        return False
+
+    def find_job(self, queue_id: int) -> Optional[tuple[str, Job]]:
+        with self._lock:
+            for name, q in self.queues.items():
+                for job in q.jobs:
+                    if job.queue_id == queue_id:
+                        return name, job
+        return None
 
     def pause(self, platform: str) -> bool:
         with self._lock:
@@ -114,16 +182,14 @@ class PostScheduler:
         try:
             result = queue.publisher.publish(job.video_path, job.caption, job.hashtags)
             self.db.record_post(
-                video_id=job.video_id,
-                platform=platform,
-                remote_id=result.remote_id,
-                permalink=result.permalink,
+                video_id=job.video_id, platform=platform,
+                remote_id=result.remote_id, permalink=result.permalink,
                 is_repost=job.is_repost,
             )
+            self.db.queue_delete(job.queue_id)
             self.events.publish(
-                "post.success",
-                f"posted to {platform}",
-                video_id=job.video_id, platform=platform,
+                "post.success", f"posted to {platform}",
+                queue_id=job.queue_id, video_id=job.video_id, platform=platform,
                 remote_id=result.remote_id, permalink=result.permalink,
                 repost=job.is_repost,
             )
@@ -133,17 +199,31 @@ class PostScheduler:
             with self._lock:
                 queue.jobs.appendleft(job)
             self.events.publish(
-                "post.failed",
-                f"{platform} publish failed: {type(e).__name__}",
-                level="error",
-                video_id=job.video_id, platform=platform, error=str(e)[:200],
+                "post.failed", f"{platform} publish failed: {type(e).__name__}",
+                level="error", queue_id=job.queue_id, video_id=job.video_id,
+                platform=platform, error=str(e)[:200],
             )
             return False
 
+    def drain_specific(self, queue_id: int, force: bool = True) -> bool:
+        with self._lock:
+            target_platform = None
+            for name, q in self.queues.items():
+                for job in list(q.jobs):
+                    if job.queue_id == queue_id:
+                        q.jobs.remove(job)
+                        q.jobs.appendleft(job)
+                        target_platform = name
+                        break
+                if target_platform:
+                    break
+        if target_platform is None:
+            return False
+        return self.drain_one(target_platform, force=force)
+
     def tick(self) -> None:
         for platform in list(self.queues.keys()):
-            if random.randint(0, max(1, self.jitter_minutes)) % 2 == 0:
-                self.drain_one(platform)
+            self.drain_one(platform)
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -151,8 +231,10 @@ class PostScheduler:
                 name: {
                     "queue": [
                         {
+                            "queue_id": j.queue_id,
                             "video_id": j.video_id,
                             "caption": j.caption,
+                            "hashtags": j.hashtags,
                             "is_repost": j.is_repost,
                             "path": str(j.video_path),
                         }

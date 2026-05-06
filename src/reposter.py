@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .db import DB
-from .scheduler import Job, PostScheduler
+from .scheduler import PostScheduler
 
 log = logging.getLogger(__name__)
 
@@ -66,12 +66,12 @@ class CrossPlatformReposter:
                            if p != source and not self.db.video_already_posted(video_id, p)]
                 if not targets:
                     continue
-                job = Job(
+                self.scheduler.enqueue(
                     video_id=video_id,
                     video_path=src_path,
                     caption=video.get("caption") or "",
                     hashtags=(video.get("hashtags") or "").split(),
                     is_repost=True,
+                    platforms=targets,
                 )
-                self.scheduler.enqueue(job, platforms=targets)
                 log.info("queued top performer (video %d) for repost on %s", video_id, targets)

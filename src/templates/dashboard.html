@@ -6,154 +6,159 @@
 <title>Lucidus Cockpit</title>
 <style>
   :root {
-    --bg: #0b0d10;
-    --panel: #14181d;
-    --panel-2: #1a2027;
-    --border: #232a33;
-    --text: #e6edf3;
-    --muted: #7d8590;
-    --accent: #3fb950;
-    --warn: #d29922;
-    --danger: #f85149;
-    --info: #58a6ff;
+    --bg: #0b0d10; --panel: #14181d; --panel-2: #1a2027;
+    --border: #232a33; --text: #e6edf3; --muted: #7d8590;
+    --accent: #3fb950; --warn: #d29922; --danger: #f85149; --info: #58a6ff;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  }
-  header {
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  header.topbar {
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 18px; border-bottom: 1px solid var(--border);
     background: linear-gradient(180deg, #11161c, #0b0d10);
     position: sticky; top: 0; z-index: 10;
   }
-  header h1 { font-size: 14px; margin: 0; letter-spacing: 2px; }
-  header h1 .dot {
-    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-    background: var(--accent); margin-right: 8px;
-    box-shadow: 0 0 10px var(--accent);
-    animation: pulse 1.6s ease-in-out infinite;
-  }
+  header.topbar h1 { font-size: 14px; margin: 0; letter-spacing: 2px; }
+  header.topbar h1 .dot { display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--accent); margin-right: 8px;
+    box-shadow: 0 0 10px var(--accent); animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
-  header .meta { color: var(--muted); font-size: 12px; }
+  .meta { color: var(--muted); font-size: 12px; display: flex; gap: 14px; align-items: center; }
+  .meta .health { display: flex; gap: 6px; }
+  .health span { padding: 2px 6px; border-radius: 10px; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  .health span.ok { background: rgba(63,185,80,.15); color: var(--accent); }
+  .health span.bad { background: rgba(248,81,73,.15); color: var(--danger); }
   main { padding: 16px; max-width: 1400px; margin: 0 auto; }
   .grid { display: grid; gap: 12px; }
-  .row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-  .panel {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px;
-  }
-  .panel h2 {
-    margin: 0 0 10px; font-size: 11px; letter-spacing: 1.5px;
-    color: var(--muted); text-transform: uppercase; font-weight: 600;
-  }
+  .row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .panel h2 { margin: 0 0 10px; font-size: 11px; letter-spacing: 1.5px;
+    color: var(--muted); text-transform: uppercase; font-weight: 600; }
   .kpi { display: flex; align-items: baseline; justify-content: space-between; }
   .kpi .num { font-size: 28px; font-weight: 600; }
   .kpi .sub { color: var(--muted); font-size: 12px; }
   .platforms { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-  .platform {
-    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
-    padding: 12px;
-  }
-  .platform header {
-    display: flex; align-items: center; justify-content: space-between;
-    background: none; border: none; padding: 0; position: static;
-  }
-  .platform h3 {
-    margin: 0; font-size: 13px; letter-spacing: 1px; text-transform: uppercase;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .badge {
-    display: inline-block; padding: 2px 8px; border-radius: 12px;
-    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
-  }
+  .platform { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .platform .ph { display: flex; align-items: center; justify-content: space-between; }
+  .platform h3 { margin: 0; font-size: 13px; letter-spacing: 1px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
   .badge.on { background: rgba(63,185,80,.15); color: var(--accent); }
   .badge.off { background: rgba(248,81,73,.15); color: var(--danger); }
   .badge.repost { background: rgba(88,166,255,.15); color: var(--info); }
-  .platform .stats {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0;
-    font-size: 12px;
-  }
+  .badge.warn { background: rgba(210,153,34,.15); color: var(--warn); }
+  .platform .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    margin: 10px 0; font-size: 12px; }
   .platform .stats div { color: var(--muted); }
   .platform .stats div b { color: var(--text); font-weight: 600; }
   .platform .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  button {
-    background: var(--panel); color: var(--text);
+  button { background: var(--panel); color: var(--text);
     border: 1px solid var(--border); border-radius: 6px;
     padding: 6px 10px; font: inherit; cursor: pointer;
-    transition: background .1s, border-color .1s;
-  }
+    transition: background .1s, border-color .1s; }
   button:hover { background: #1f2731; border-color: #2f3942; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
   button.primary { border-color: var(--accent); color: var(--accent); }
   button.warn { border-color: var(--warn); color: var(--warn); }
   button.danger { border-color: var(--danger); color: var(--danger); }
-  .feed {
-    height: 420px; overflow-y: auto; font-size: 12px;
-    background: #07090b; border-radius: 6px; padding: 8px;
-    border: 1px solid var(--border);
-  }
-  .feed .ev { padding: 4px 0; border-bottom: 1px dashed #1a2027; display: grid; grid-template-columns: 80px 130px 1fr; gap: 8px; }
+  .feed { height: 360px; overflow-y: auto; font-size: 12px;
+    background: #07090b; border-radius: 6px; padding: 8px; border: 1px solid var(--border); }
+  .feed .ev { padding: 4px 0; border-bottom: 1px dashed #1a2027;
+    display: grid; grid-template-columns: 80px 150px 1fr; gap: 8px; }
   .feed .ev:last-child { border-bottom: none; }
   .feed .ts { color: var(--muted); }
   .feed .kind { color: var(--info); }
   .feed .kind.post-success { color: var(--accent); }
-  .feed .kind.post-failed { color: var(--danger); }
-  .feed .kind.platform-paused, .feed .kind.platform-resumed { color: var(--warn); }
+  .feed .kind.post-failed, .feed .kind.ingest-failed { color: var(--danger); }
+  .feed .kind.platform-paused, .feed .kind.platform-resumed,
+  .feed .kind.queue-edited, .feed .kind.queue-removed { color: var(--warn); }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border); }
+  th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
   th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   td a { color: var(--info); text-decoration: none; }
   td a:hover { text-decoration: underline; }
+  tr.queue-row { cursor: pointer; }
+  tr.queue-row:hover { background: rgba(88,166,255,.05); }
   .controls { display: flex; gap: 8px; flex-wrap: wrap; }
-  .toast {
-    position: fixed; bottom: 16px; right: 16px; padding: 10px 14px;
+  .toast { position: fixed; bottom: 16px; right: 16px; padding: 10px 14px;
     background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    box-shadow: 0 4px 24px rgba(0,0,0,.4); transition: opacity .3s;
-    font-size: 12px;
-  }
+    box-shadow: 0 4px 24px rgba(0,0,0,.4); transition: opacity .3s; font-size: 12px; }
   .toast.hide { opacity: 0; pointer-events: none; }
   .empty { color: var(--muted); font-style: italic; padding: 12px 0; }
-  .file { font-family: inherit; color: var(--muted); font-size: 12px; }
-  .caption-cell { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .caption-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .search { display: flex; gap: 8px; margin-bottom: 10px; }
+  .search input, .search select { background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: inherit; }
+  .search input { flex: 1; min-width: 160px; }
+  svg.spark { display: block; }
+  .er { color: var(--accent); }
+  .er.low { color: var(--warn); }
+
+  /* Modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    display: none; align-items: center; justify-content: center; z-index: 50; }
+  .modal-bg.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; width: min(640px, 92vw); max-height: 92vh; overflow-y: auto; }
+  .modal h2 { margin-top: 0; font-size: 14px; letter-spacing: 1.5px; }
+  .modal label { display: block; font-size: 11px; letter-spacing: 1px;
+    color: var(--muted); margin: 12px 0 4px; text-transform: uppercase; }
+  .modal textarea, .modal input { width: 100%; background: var(--panel-2);
+    color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px; font: inherit; resize: vertical; }
+  .modal textarea { min-height: 80px; }
+  .modal .footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  .modal .meta-row { color: var(--muted); font-size: 11px; margin: 6px 0; }
+  .help { position: fixed; bottom: 16px; left: 16px; padding: 10px 14px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    font-size: 11px; color: var(--muted); }
+  .help kbd { display: inline-block; padding: 1px 6px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 4px; color: var(--text);
+    font-family: inherit; font-size: 11px; margin: 0 2px; }
 </style>
 </head>
 <body>
-  <header>
+  <header class="topbar">
     <h1><span class="dot"></span>LUCIDUS COCKPIT</h1>
-    <div class="meta" id="meta">connecting…</div>
+    <div class="meta">
+      <div class="health" id="health"></div>
+      <span id="meta">connecting…</span>
+    </div>
   </header>
 
   <main class="grid">
 
     <section class="row">
-      <div class="panel">
-        <h2>Inbox</h2>
-        <div class="kpi"><span class="num" id="kpi-inbox">0</span><span class="sub">videos waiting</span></div>
-      </div>
-      <div class="panel">
-        <h2>Failed</h2>
-        <div class="kpi"><span class="num" id="kpi-failed">0</span><span class="sub">need attention</span></div>
-      </div>
-      <div class="panel">
-        <h2>Total views (latest)</h2>
-        <div class="kpi"><span class="num" id="kpi-views">0</span><span class="sub">across platforms</span></div>
-      </div>
-      <div class="panel">
-        <h2>Total likes</h2>
-        <div class="kpi"><span class="num" id="kpi-likes">0</span><span class="sub">across platforms</span></div>
-      </div>
+      <div class="panel"><h2>Inbox</h2>
+        <div class="kpi"><span class="num" id="kpi-inbox">0</span><span class="sub">waiting</span></div></div>
+      <div class="panel"><h2>Failed</h2>
+        <div class="kpi"><span class="num" id="kpi-failed">0</span><span class="sub">need retry</span></div></div>
+      <div class="panel"><h2>Ingest errors</h2>
+        <div class="kpi"><span class="num" id="kpi-errors">0</span><span class="sub">on record</span></div></div>
+      <div class="panel"><h2>Total views</h2>
+        <div class="kpi"><span class="num" id="kpi-views">0</span><span class="sub">latest</span></div></div>
+      <div class="panel"><h2>Total likes</h2>
+        <div class="kpi"><span class="num" id="kpi-likes">0</span><span class="sub">latest</span></div></div>
     </section>
 
     <section class="panel">
       <h2>Platforms</h2>
       <div class="platforms" id="platforms"></div>
       <div class="controls" style="margin-top: 12px">
-        <button id="scan">scan inbox now</button>
-        <button id="metrics">collect metrics now</button>
-        <button id="retry" class="warn">retry failed</button>
+        <button id="scan" title="(s) scan inbox now">scan inbox now</button>
+        <button id="metrics" title="(m) collect metrics">collect metrics now</button>
+        <button id="retry" class="warn" title="(r) retry failed">retry failed</button>
       </div>
+    </section>
+
+    <section class="panel">
+      <h2>Queue</h2>
+      <table id="queue"><thead><tr>
+        <th>platform</th><th>caption</th><th>type</th><th></th>
+      </tr></thead><tbody></tbody></table>
     </section>
 
     <section class="row">
@@ -165,9 +170,14 @@
 
     <section class="panel">
       <h2>Recent posts</h2>
+      <div class="search">
+        <input id="search" placeholder="search caption / hashtags…" />
+        <select id="filter-platform"><option value="">all platforms</option></select>
+      </div>
       <table id="posts"><thead><tr>
         <th>when</th><th>platform</th><th>caption</th>
-        <th class="num">views</th><th class="num">likes</th><th class="num">comments</th><th>link</th>
+        <th class="num">views</th><th class="num">likes</th>
+        <th class="num">ER</th><th>trend</th><th>link</th>
       </tr></thead><tbody></tbody></table>
     </section>
 
@@ -180,9 +190,35 @@
 
   <div class="toast hide" id="toast"></div>
 
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" id="modal">
+      <h2>Edit queued post <span id="m-id" class="badge warn"></span></h2>
+      <div class="meta-row" id="m-meta"></div>
+      <label>Caption</label>
+      <textarea id="m-caption" maxlength="300"></textarea>
+      <label>Hashtags <span style="color:var(--muted);text-transform:none;letter-spacing:0">(space-separated, no #)</span></label>
+      <input id="m-hashtags" />
+      <label>Transcript (read-only)</label>
+      <textarea id="m-transcript" readonly style="min-height:60px;color:var(--muted)"></textarea>
+      <div class="footer">
+        <button id="m-regen" class="warn">regenerate</button>
+        <button id="m-remove" class="danger">remove</button>
+        <button id="m-cancel">cancel</button>
+        <button id="m-save" class="primary">save</button>
+        <button id="m-post" class="primary">save &amp; post now</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="help">
+    <kbd>s</kbd> scan · <kbd>m</kbd> metrics · <kbd>r</kbd> retry ·
+    <kbd>/</kbd> search · <kbd>Esc</kbd> close
+  </div>
+
 <script>
 const fmt = {
   num(n) { return (n || 0).toLocaleString(); },
+  pct(n) { return (n * 100).toFixed(1) + "%"; },
   ago(iso) {
     if (!iso) return "—";
     const d = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -191,30 +227,51 @@ const fmt = {
     if (d < 86400) return Math.floor(d / 3600) + "h";
     return Math.floor(d / 86400) + "d";
   },
-  ts(iso) {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  },
+  ts(iso) { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); },
 };
+
+function spark(series, key = "views", w = 80, h = 22) {
+  if (!series || series.length < 2) return "—";
+  const vals = series.map(s => s[key] || 0);
+  const max = Math.max(...vals, 1);
+  const points = vals.map((v, i) => {
+    const x = (i / (vals.length - 1)) * w;
+    const y = h - (v / max) * (h - 2) - 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const last = vals[vals.length - 1];
+  const first = vals[0];
+  const stroke = last >= first ? "#3fb950" : "#f85149";
+  return `<svg class="spark" width="${w}" height="${h}"><polyline fill="none" stroke="${stroke}" stroke-width="1.5" points="${points}"/></svg>`;
+}
 
 function toast(msg) {
   const t = document.getElementById("toast");
   t.textContent = msg;
   t.classList.remove("hide");
   clearTimeout(t._h);
-  t._h = setTimeout(() => t.classList.add("hide"), 2000);
+  t._h = setTimeout(() => t.classList.add("hide"), 2200);
 }
 
 async function api(path, opts = {}) {
-  const r = await fetch(path, { method: opts.method || "GET", headers: { "Content-Type": "application/json" }, body: opts.body });
+  const r = await fetch(path, {
+    method: opts.method || "GET",
+    headers: { "Content-Type": "application/json" },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
+const state = { search: "", platform: "", lastStats: null, knownPlatforms: new Set() };
+
 async function refresh() {
   try {
     const s = await api("/api/stats");
+    state.lastStats = s;
     document.getElementById("kpi-inbox").textContent = s.inbox.count;
     document.getElementById("kpi-failed").textContent = s.failed_count;
+    document.getElementById("kpi-errors").textContent = s.ingest_errors;
 
     let views = 0, likes = 0;
     Object.values(s.totals || {}).forEach(t => { views += t.views || 0; likes += t.likes || 0; });
@@ -222,8 +279,16 @@ async function refresh() {
     document.getElementById("kpi-likes").textContent = fmt.num(likes);
 
     renderPlatforms(s);
+    renderQueue(s);
 
-    const posts = await api("/api/posts?limit=25");
+    Object.keys(s.platforms || {}).forEach(p => state.knownPlatforms.add(p));
+    syncPlatformFilter();
+
+    const params = new URLSearchParams();
+    if (state.search) params.set("q", state.search);
+    if (state.platform) params.set("platform", state.platform);
+    params.set("limit", "30");
+    const posts = await api("/api/posts?" + params.toString());
     renderPosts(posts);
 
     const top = await api("/api/top");
@@ -235,19 +300,42 @@ async function refresh() {
   }
 }
 
+async function refreshHealth() {
+  try {
+    const h = await api("/api/health");
+    const el = document.getElementById("health");
+    el.innerHTML = Object.entries(h).map(([k, v]) =>
+      `<span class="${v.ok ? "ok" : "bad"}" title="${(v.error || "ok").replace(/"/g, "&quot;")}">${k}</span>`
+    ).join("");
+  } catch (_) {}
+}
+
+function syncPlatformFilter() {
+  const sel = document.getElementById("filter-platform");
+  const have = new Set([...sel.options].map(o => o.value));
+  state.knownPlatforms.forEach(p => {
+    if (!have.has(p)) {
+      const o = document.createElement("option");
+      o.value = p; o.textContent = p;
+      sel.appendChild(o);
+    }
+  });
+}
+
 function renderPlatforms(s) {
   const el = document.getElementById("platforms");
   el.innerHTML = "";
   for (const [name, p] of Object.entries(s.platforms || {})) {
-    const t = s.totals[name] || { views: 0, likes: 0, posts: 0 };
+    const t = (s.totals || {})[name] || { views: 0, likes: 0, posts: 0 };
     const div = document.createElement("div");
     div.className = "platform";
     const status = p.paused ? `<span class="badge off">paused</span>` : `<span class="badge on">active</span>`;
+    const capWarn = p.posts_today >= p.max_per_day ? `<span class="badge warn">cap</span>` : "";
     div.innerHTML = `
-      <header>
-        <h3>${name}${status}</h3>
+      <div class="ph">
+        <h3>${name}${status}${capWarn}</h3>
         <span class="sub" style="color:var(--muted); font-size:11px">queue ${p.queue.length}</span>
-      </header>
+      </div>
       <div class="stats">
         <div>today <b>${p.posts_today}/${p.max_per_day}</b></div>
         <div>last <b>${fmt.ago(p.last_post)}</b></div>
@@ -265,31 +353,59 @@ function renderPlatforms(s) {
   }
   el.querySelectorAll("button[data-act]").forEach(b => {
     b.addEventListener("click", async () => {
-      const p = b.dataset.p;
-      const act = b.dataset.act;
       try {
-        await api(`/api/platform/${p}/${act}`, { method: "POST" });
-        toast(`${p}: ${act}`);
+        await api(`/api/platform/${b.dataset.p}/${b.dataset.act}`, { method: "POST" });
+        toast(`${b.dataset.p}: ${b.dataset.act}`);
         refresh();
       } catch (e) { toast("error: " + e.message); }
     });
   });
 }
 
+function renderQueue(s) {
+  const tbody = document.querySelector("#queue tbody");
+  const items = [];
+  for (const [platform, p] of Object.entries(s.platforms || {})) {
+    p.queue.forEach(j => items.push({ ...j, platform }));
+  }
+  if (!items.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">queue empty</td></tr>`; return; }
+  tbody.innerHTML = items.map(j => `
+    <tr class="queue-row" data-qid="${j.queue_id}">
+      <td>${j.platform}</td>
+      <td class="caption-cell" title="${(j.caption || "").replace(/"/g, "&quot;")}">${j.caption || "—"}</td>
+      <td>${j.is_repost ? `<span class="badge repost">repost</span>` : "new"}</td>
+      <td><button data-edit="${j.queue_id}">edit</button></td>
+    </tr>
+  `).join("");
+  tbody.querySelectorAll("tr.queue-row").forEach(tr => {
+    tr.addEventListener("click", (e) => {
+      if (e.target.tagName === "BUTTON") return;
+      openEdit(tr.dataset.qid);
+    });
+  });
+  tbody.querySelectorAll("button[data-edit]").forEach(b => {
+    b.addEventListener("click", () => openEdit(b.dataset.edit));
+  });
+}
+
 function renderPosts(rows) {
   const tbody = document.querySelector("#posts tbody");
-  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty">no posts yet</td></tr>`; return; }
-  tbody.innerHTML = rows.map(r => `
+  if (!rows.length) { tbody.innerHTML = `<tr><td colspan="8" class="empty">no posts yet</td></tr>`; return; }
+  tbody.innerHTML = rows.map(r => {
+    const er = r.engagement_rate || 0;
+    const erClass = er >= 0.05 ? "er" : "er low";
+    return `
     <tr>
       <td>${fmt.ago(r.posted_at)}</td>
-      <td>${r.platform}${r.is_repost ? ` <span class="badge repost">repost</span>` : ""}</td>
+      <td>${r.platform}${r.is_repost ? ` <span class="badge repost">re</span>` : ""}</td>
       <td class="caption-cell" title="${(r.caption || "").replace(/"/g, "&quot;")}">${r.caption || "—"}</td>
       <td class="num">${fmt.num(r.views)}</td>
       <td class="num">${fmt.num(r.likes)}</td>
-      <td class="num">${fmt.num(r.comments)}</td>
+      <td class="num ${erClass}">${er ? fmt.pct(er) : "—"}</td>
+      <td>${spark(r.series, "views")}</td>
       <td>${r.permalink ? `<a href="${r.permalink}" target="_blank">open</a>` : "—"}</td>
-    </tr>
-  `).join("");
+    </tr>`;
+  }).join("");
 }
 
 function renderTop(byPlatform) {
@@ -300,10 +416,19 @@ function renderTop(byPlatform) {
   }
   if (!all.length) { el.innerHTML = `<div class="empty">need more metrics first</div>`; return; }
   all.sort((a, b) => b.views - a.views);
-  el.innerHTML = `<table><thead><tr><th>platform</th><th>video</th><th class="num">views</th></tr></thead>
-    <tbody>${all.slice(0, 10).map(r => `
-      <tr><td>${r.platform}</td><td>#${r.video_id}</td><td class="num">${fmt.num(r.views)}</td></tr>
-    `).join("")}</tbody></table>`;
+  el.innerHTML = `<table><thead><tr>
+      <th>platform</th><th>video</th>
+      <th class="num">views</th><th class="num">likes</th><th class="num">ER</th>
+    </tr></thead><tbody>${all.slice(0, 10).map(r => {
+      const er = r.engagement_rate || 0;
+      const erClass = er >= 0.05 ? "er" : "er low";
+      return `<tr>
+        <td>${r.platform}</td><td>#${r.video_id}</td>
+        <td class="num">${fmt.num(r.views)}</td>
+        <td class="num">${fmt.num(r.likes)}</td>
+        <td class="num ${erClass}">${fmt.pct(er)}</td>
+      </tr>`;
+    }).join("")}</tbody></table>`;
 }
 
 function appendEvent(ev) {
@@ -316,12 +441,64 @@ function appendEvent(ev) {
   while (feed.children.length > 200) feed.removeChild(feed.lastChild);
 }
 
+let editingId = null;
+async function openEdit(qid) {
+  editingId = qid;
+  try {
+    const row = await api(`/api/queue/${qid}`);
+    document.getElementById("m-id").textContent = "#" + qid;
+    document.getElementById("m-meta").textContent =
+      `platform: ${row.platform} · video #${row.video_id} · ${row.is_repost ? "repost" : "new"} · ${row.video_path}`;
+    document.getElementById("m-caption").value = row.caption || "";
+    document.getElementById("m-hashtags").value = (row.hashtags || "").trim();
+    document.getElementById("m-transcript").value = row.transcript || "(no transcript)";
+    document.getElementById("modal-bg").classList.add("show");
+    document.getElementById("m-caption").focus();
+  } catch (e) { toast("error: " + e.message); }
+}
+function closeEdit() { document.getElementById("modal-bg").classList.remove("show"); editingId = null; }
+
+async function saveEdit(thenPost = false) {
+  if (!editingId) return;
+  const caption = document.getElementById("m-caption").value.trim();
+  const hashtags = document.getElementById("m-hashtags").value.split(/\s+/).filter(Boolean);
+  try {
+    await api(`/api/queue/${editingId}`, { method: "PUT", body: { caption, hashtags } });
+    if (thenPost) await api(`/api/queue/${editingId}/post-now`, { method: "POST" });
+    toast(thenPost ? "saved & posted" : "saved");
+    closeEdit();
+    refresh();
+  } catch (e) { toast("error: " + e.message); }
+}
+
+document.getElementById("m-cancel").addEventListener("click", closeEdit);
+document.getElementById("modal-bg").addEventListener("click", (e) => { if (e.target.id === "modal-bg") closeEdit(); });
+document.getElementById("m-save").addEventListener("click", () => saveEdit(false));
+document.getElementById("m-post").addEventListener("click", () => saveEdit(true));
+document.getElementById("m-remove").addEventListener("click", async () => {
+  if (!editingId) return;
+  if (!confirm("remove from queue?")) return;
+  try { await api(`/api/queue/${editingId}`, { method: "DELETE" }); toast("removed"); closeEdit(); refresh(); }
+  catch (e) { toast("error: " + e.message); }
+});
+document.getElementById("m-regen").addEventListener("click", async () => {
+  if (!editingId) return;
+  try {
+    const r = await api(`/api/queue/${editingId}/regenerate`, { method: "POST" });
+    document.getElementById("m-caption").value = r.caption || "";
+    document.getElementById("m-hashtags").value = (r.hashtags || []).join(" ");
+    toast("regenerated");
+  } catch (e) { toast("error: " + e.message); }
+});
+
 const es = new EventSource("/api/events");
 es.onmessage = (e) => {
   try {
     const ev = JSON.parse(e.data);
     appendEvent(ev);
-    if (["post.success", "post.failed", "queue.enqueued", "platform.paused", "platform.resumed"].includes(ev.kind)) {
+    if (["post.success", "post.failed", "queue.enqueued", "queue.removed",
+         "queue.edited", "platform.paused", "platform.resumed",
+         "ingest.complete", "ingest.failed"].includes(ev.kind)) {
       refresh();
     }
   } catch (_) {}
@@ -338,8 +515,32 @@ document.getElementById("retry").addEventListener("click", async () => {
   const r = await api("/api/retry-failed", { method: "POST" }); toast(`moved ${r.moved} files`); refresh();
 });
 
+const search = document.getElementById("search");
+let debounce;
+search.addEventListener("input", () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => { state.search = search.value.trim(); refresh(); }, 250);
+});
+document.getElementById("filter-platform").addEventListener("change", (e) => {
+  state.platform = e.target.value; refresh();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
+    if (e.key === "Escape") e.target.blur();
+    return;
+  }
+  if (e.key === "Escape") { closeEdit(); return; }
+  if (e.key === "/") { e.preventDefault(); search.focus(); return; }
+  if (e.key === "s") document.getElementById("scan").click();
+  if (e.key === "m") document.getElementById("metrics").click();
+  if (e.key === "r") document.getElementById("retry").click();
+});
+
 refresh();
+refreshHealth();
 setInterval(refresh, 15000);
+setInterval(refreshHealth, 60000);
 </script>
 </body>
 </html>
