@@ -23,6 +23,7 @@ class Job:
     caption: str
     hashtags: list[str]
     is_repost: bool = False
+    retry_count: int = 0
 
 
 @dataclass
@@ -34,7 +35,11 @@ class PlatformQueue:
 
 class PostScheduler:
     """Drip-posts jobs to each platform respecting daily caps and min spacing.
-    Queue is persisted in SQLite so it survives restarts."""
+    Queue is persisted in SQLite so it survives restarts.
+
+    Failed jobs are retried up to max_retries times before being dead-lettered
+    (removed from queue and a dead_letter event emitted).
+    """
 
     def __init__(
         self,
@@ -44,6 +49,7 @@ class PostScheduler:
         min_minutes_between: int,
         jitter_minutes: int,
         events: Optional[EventBus] = None,
+        max_retries: int = 5,
     ):
         self.db = db
         self.queues = {p.name: PlatformQueue(publisher=p) for p in publishers}
@@ -51,6 +57,7 @@ class PostScheduler:
         self.min_minutes_between = min_minutes_between
         self.jitter_minutes = jitter_minutes
         self.events = events or EventBus()
+        self.max_retries = max_retries
         self._lock = Lock()
         self.scheduler = BackgroundScheduler(timezone="UTC")
 
@@ -76,7 +83,8 @@ class PostScheduler:
             ))
             loaded += 1
         if loaded:
-            self.events.publish("queue.hydrated", f"restored {loaded} queued jobs from db", count=loaded)
+            self.events.publish("queue.hydrated", f"restored {loaded} queued jobs from db",
+                                count=loaded)
         return loaded
 
     def enqueue(self, video_id: int, video_path: Path, caption: str, hashtags: list[str],
@@ -195,13 +203,29 @@ class PostScheduler:
             )
             return True
         except Exception as e:
-            log.exception("publish failed on %s; requeuing", platform)
+            log.exception("publish failed on %s", platform)
+            job.retry_count += 1
+            if job.retry_count >= self.max_retries:
+                # Dead letter: remove permanently and surface as an error.
+                self.db.queue_delete(job.queue_id)
+                self.events.publish(
+                    "post.dead_letter",
+                    f"{platform}: gave up after {job.retry_count} retries — {type(e).__name__}",
+                    level="error",
+                    queue_id=job.queue_id, video_id=job.video_id,
+                    platform=platform, retries=job.retry_count, error=str(e)[:200],
+                )
+                log.error(
+                    "Dead-lettered queue_id=%s on %s after %d retries",
+                    job.queue_id, platform, job.retry_count,
+                )
+                return False
             with self._lock:
                 queue.jobs.appendleft(job)
             self.events.publish(
-                "post.failed", f"{platform} publish failed: {type(e).__name__}",
+                "post.failed", f"{platform} publish failed (attempt {job.retry_count}): {type(e).__name__}",
                 level="error", queue_id=job.queue_id, video_id=job.video_id,
-                platform=platform, error=str(e)[:200],
+                platform=platform, retries=job.retry_count, error=str(e)[:200],
             )
             return False
 
@@ -236,6 +260,7 @@ class PostScheduler:
                             "caption": j.caption,
                             "hashtags": j.hashtags,
                             "is_repost": j.is_repost,
+                            "retry_count": j.retry_count,
                             "path": str(j.video_path),
                         }
                         for j in q.jobs

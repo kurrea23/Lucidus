@@ -4,11 +4,28 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import anthropic
 from openai import OpenAI
 
 log = logging.getLogger(__name__)
+
+# Platform-specific prompt additions appended after the base style.
+PLATFORM_HINTS: dict[str, str] = {
+    "youtube": (
+        "This is for YouTube Shorts: put the hook in the first 5 words because viewers "
+        "see the title before clicking. 3–5 hashtags max. Always include #Shorts."
+    ),
+    "instagram": (
+        "This is for Instagram Reels: conversational and relatable tone. "
+        "Emojis add personality — use 1–3 where they fit. 5–10 hashtags."
+    ),
+    "tiktok": (
+        "This is for TikTok: punchy, lowercase feel is fine, trend-aware. "
+        "3–5 hashtags inline. Keep it under 100 characters for the caption."
+    ),
+}
 
 
 @dataclass
@@ -43,18 +60,19 @@ def transcribe(video: Path, openai_key: str) -> str:
         audio.unlink(missing_ok=True)
 
 
-CAPTION_PROMPT = """You write short-form video captions for TikTok, Reels, and YouTube Shorts.
+CAPTION_PROMPT = """You write short-form video captions for social media.
 
 Transcript of the video:
 \"\"\"
 {transcript}
 \"\"\"
 
-Style: {style}
+Base style: {style}
+Platform guidance: {platform_hint}
 
 Return strict JSON with this shape and nothing else:
 {{
-  "caption": "<= 150 chars, hook-first, no emojis unless they add meaning, no hashtags inside the caption>",
+  "caption": "<= 150 chars, hook-first, no hashtags inside the caption>",
   "hashtags": ["tag1", "tag2", ...up to {max_tags} relevant tags, no leading #"]
 }}"""
 
@@ -65,9 +83,11 @@ def generate_caption(
     model: str = "claude-sonnet-4-6",
     max_hashtags: int = 8,
     style: str = "engaging, hook-first, no clickbait",
+    platform: Optional[str] = None,
 ) -> tuple[str, list[str]]:
     if not transcript.strip():
         return ("", [])
+    platform_hint = PLATFORM_HINTS.get(platform or "", "Generic short-form video.")
     client = anthropic.Anthropic(api_key=anthropic_key)
     msg = client.messages.create(
         model=model,
@@ -77,6 +97,7 @@ def generate_caption(
             "content": CAPTION_PROMPT.format(
                 transcript=transcript[:4000],
                 style=style,
+                platform_hint=platform_hint,
                 max_tags=max_hashtags,
             ),
         }],
@@ -90,15 +111,25 @@ def generate_caption(
     return (data.get("caption", "")[:150], data.get("hashtags", [])[:max_hashtags])
 
 
-def caption_for_video(video: Path, cfg: dict) -> CaptionResult:
+def caption_for_video(
+    video: Path,
+    cfg: dict,
+    platform: Optional[str] = None,
+) -> CaptionResult:
     api = cfg["api_keys"]
-    cap_cfg = cfg.get("captions", {})
+    cap_cfg = cfg.get("captions", {}) or {}
+
+    # Allow per-platform style overrides in config under captions.platform_styles.<name>
+    platform_styles = cap_cfg.get("platform_styles") or {}
+    style = platform_styles.get(platform or "", cap_cfg.get("style", "engaging, hook-first, no clickbait"))
+
     transcript = transcribe(video, api["openai"]) if api.get("openai") else ""
     caption, tags = generate_caption(
         transcript=transcript,
         anthropic_key=api["anthropic"],
         model=cap_cfg.get("model", "claude-sonnet-4-6"),
         max_hashtags=cap_cfg.get("max_hashtags", 8),
-        style=cap_cfg.get("style", "engaging, hook-first, no clickbait"),
+        style=style,
+        platform=platform,
     )
     return CaptionResult(transcript=transcript, caption=caption, hashtags=tags)

@@ -1,12 +1,16 @@
 import asyncio
+import base64
 import json
 import logging
+import secrets
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from .analytics import AnalyticsCollector
 from .caption import generate_caption
@@ -25,6 +29,26 @@ class CaptionEdit(BaseModel):
     hashtags: list[str] = []
 
 
+class _BasicAuthMiddleware(BaseHTTPMiddleware):
+    """Optional HTTP Basic Auth. Only active when dashboard.auth is configured."""
+
+    def __init__(self, app, username: str, password: str):
+        super().__init__(app)
+        self._encoded = base64.b64encode(f"{username}:{password}".encode()).decode()
+
+    async def dispatch(self, request: Request, call_next):
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Basic ") or not secrets.compare_digest(
+            auth[6:], self._encoded
+        ):
+            return Response(
+                "Unauthorized",
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="Lucidus"'},
+            )
+        return await call_next(request)
+
+
 def create_app(
     cfg: Config,
     db: DB,
@@ -35,6 +59,15 @@ def create_app(
     publishers: list,
 ) -> FastAPI:
     app = FastAPI(title="Lucidus Cockpit")
+
+    # Optional basic auth — only active when username + password are configured.
+    dash_cfg = cfg.get("dashboard", {}) or {}
+    auth_cfg = dash_cfg.get("auth") or {}
+    if auth_cfg.get("username") and auth_cfg.get("password"):
+        app.add_middleware(_BasicAuthMiddleware,
+                           username=auth_cfg["username"],
+                           password=auth_cfg["password"])
+        log.info("Cockpit basic auth enabled for user '%s'", auth_cfg["username"])
 
     static_dir = TEMPLATES / "static"
     if static_dir.exists():
@@ -173,12 +206,14 @@ def create_app(
             raise HTTPException(409, "no transcript on file; cannot regenerate")
         cap_cfg = cfg.get("captions", {}) or {}
         api = cfg["api_keys"]
+        # Use queue platform for platform-specific hint.
         caption, tags = generate_caption(
             transcript=transcript,
             anthropic_key=api["anthropic"],
             model=cap_cfg.get("model", "claude-sonnet-4-6"),
             max_hashtags=cap_cfg.get("max_hashtags", 8),
             style=cap_cfg.get("style", "engaging, hook-first, no clickbait"),
+            platform=row.get("platform"),
         )
         scheduler.update_job(queue_id, caption, tags)
         events.publish("caption.regenerated", f"regenerated caption for queue {queue_id}",
@@ -187,7 +222,8 @@ def create_app(
 
     @app.post("/api/queue/{queue_id}/post-now")
     def queue_post_now(queue_id: int):
-        events.publish("user.post_now", f"manual drain requested for queue {queue_id}", queue_id=queue_id)
+        events.publish("user.post_now", f"manual drain requested for queue {queue_id}",
+                       queue_id=queue_id)
         ok = scheduler.drain_specific(queue_id, force=True)
         if not ok:
             raise HTTPException(404)
@@ -233,6 +269,39 @@ def create_app(
         ok = scheduler.drain_one(name, force=True)
         return {"ok": ok}
 
+    # ------------------------------------------------------------------
+    # Instagram token management
+    # ------------------------------------------------------------------
+
+    @app.get("/api/platform/instagram/token-status")
+    def ig_token_status():
+        ig_pub = next(
+            (p for p in publishers if p.name == "instagram" and hasattr(p, "token_status")),
+            None,
+        )
+        if ig_pub is None:
+            raise HTTPException(404, "Instagram not configured")
+        return ig_pub.token_status()
+
+    @app.post("/api/platform/instagram/refresh-token")
+    def ig_refresh_token():
+        ig_pub = next(
+            (p for p in publishers if p.name == "instagram" and hasattr(p, "refresh_token")),
+            None,
+        )
+        if ig_pub is None:
+            raise HTTPException(404, "Instagram not configured")
+        try:
+            data = ig_pub.refresh_token()
+            events.publish("ig.token_refreshed", "Instagram token manually refreshed")
+            return {"ok": True, "expires_in": data.get("expires_in")}
+        except Exception as exc:
+            raise HTTPException(500, str(exc)[:300])
+
+    # ------------------------------------------------------------------
+    # Utility endpoints
+    # ------------------------------------------------------------------
+
     @app.post("/api/scan-now")
     def scan_now():
         events.publish("user.scan_now", "manual inbox scan")
@@ -268,7 +337,11 @@ def create_app(
             try:
                 if hasattr(p, "service"):
                     p.service()
-                out[p.name] = {"ok": True}
+                if hasattr(p, "token_status"):
+                    status = p.token_status()
+                    out[p.name] = {"ok": status.get("valid", True), **status}
+                else:
+                    out[p.name] = {"ok": True}
             except Exception as e:
                 out[p.name] = {"ok": False, "error": f"{type(e).__name__}: {e}"[:200]}
         return out
@@ -277,7 +350,8 @@ def create_app(
     def errors():
         with db.connect() as c:
             rows = c.execute(
-                "SELECT id, source_path, error, error_at FROM videos WHERE error IS NOT NULL ORDER BY error_at DESC LIMIT 50"
+                "SELECT id, source_path, error, error_at FROM videos "
+                "WHERE error IS NOT NULL ORDER BY error_at DESC LIMIT 50"
             ).fetchall()
         return [dict(r) for r in rows]
 

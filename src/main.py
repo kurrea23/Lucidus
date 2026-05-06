@@ -3,6 +3,7 @@ import signal
 import sys
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import uvicorn
@@ -50,12 +51,14 @@ def build_publishers(cfg: Config) -> list:
             access_token=ig["access_token"],
             business_account_id=ig["business_account_id"],
             public_url_resolver=resolver,
+            token_file=ig.get("token_file"),
         ))
     if cfg["tiktok"].get("enabled"):
         tt = cfg["tiktok"]
         pubs.append(TikTokPublisher(
             access_token=tt["access_token"],
             open_id=tt["open_id"],
+            privacy=tt.get("privacy_level", "SELF_ONLY"),
         ))
     if not pubs:
         raise RuntimeError("No publishers enabled. Edit config.yaml.")
@@ -63,6 +66,9 @@ def build_publishers(cfg: Config) -> list:
 
 
 def make_handler(cfg: Config, db: DB, scheduler: PostScheduler, events: EventBus):
+    cap_cfg = cfg.get("captions", {}) or {}
+    per_platform = cap_cfg.get("per_platform", False)
+
     def handle(path: Path) -> None:
         events.publish("ingest.started", f"ingesting {path.name}", file=path.name)
         sha = None
@@ -80,18 +86,44 @@ def make_handler(cfg: Config, db: DB, scheduler: PostScheduler, events: EventBus
                     f"sha already known; reusing caption for video {video_id}",
                     video_id=video_id, file=path.name,
                 )
+                stored = move_to(path, cfg.posted)
+                scheduler.enqueue(
+                    video_id=video_id, video_path=stored,
+                    caption=caption, hashtags=hashtags,
+                )
+            elif per_platform and len(scheduler.queues) > 1:
+                # Generate a tailored caption for each platform in a single ingest pass.
+                video_id, _ = db.insert_video(sha, str(path), duration)
+                platform_caps = {}
+                base_cap = None
+                for pname in scheduler.queues.keys():
+                    cap = caption_for_video(path, cfg.raw, platform=pname)
+                    platform_caps[pname] = cap
+                    if base_cap is None:
+                        base_cap = cap
+                # Store the first platform's caption as the canonical video caption.
+                db.update_caption(video_id, base_cap.transcript, base_cap.caption,
+                                  " ".join(base_cap.hashtags))
+                stored = move_to(path, cfg.posted)
+                for pname, cap in platform_caps.items():
+                    scheduler.enqueue(
+                        video_id=video_id, video_path=stored,
+                        caption=cap.caption, hashtags=cap.hashtags,
+                        platforms=[pname],
+                    )
+                caption = base_cap.caption
             else:
                 video_id, _ = db.insert_video(sha, str(path), duration)
                 cap = caption_for_video(path, cfg.raw)
                 db.update_caption(video_id, cap.transcript, cap.caption, " ".join(cap.hashtags))
                 caption = cap.caption
                 hashtags = cap.hashtags
+                stored = move_to(path, cfg.posted)
+                scheduler.enqueue(
+                    video_id=video_id, video_path=stored,
+                    caption=caption, hashtags=hashtags,
+                )
 
-            stored = move_to(path, cfg.posted)
-            scheduler.enqueue(
-                video_id=video_id, video_path=stored,
-                caption=caption, hashtags=hashtags,
-            )
             events.publish(
                 "ingest.complete",
                 f"ingested video {video_id} ({stored.name})",
@@ -118,6 +150,14 @@ def make_handler(cfg: Config, db: DB, scheduler: PostScheduler, events: EventBus
 
 def main(config_path: str = "config.yaml") -> int:
     cfg = Config.load(config_path)
+
+    errors = cfg.validate()
+    if errors:
+        for e in errors:
+            log.error("CONFIG ERROR: %s", e)
+        log.error("Fix the errors above and restart.")
+        return 1
+
     db = DB(cfg.db_path)
     events = EventBus(capacity=cfg.get("dashboard", {}).get("event_buffer", 500))
     publishers = build_publishers(cfg)
@@ -128,6 +168,7 @@ def main(config_path: str = "config.yaml") -> int:
         max_per_day=posting["max_per_platform_per_day"],
         min_minutes_between=posting["min_minutes_between_posts"],
         jitter_minutes=posting["jitter_minutes"],
+        max_retries=posting.get("max_retries", 5),
         events=events,
     )
     scheduler.hydrate_from_db()
@@ -141,8 +182,29 @@ def main(config_path: str = "config.yaml") -> int:
     )
 
     bg = BackgroundScheduler(timezone="UTC")
-    bg.add_job(analytics.collect, "interval", hours=cfg["analytics"]["pull_interval_hours"], id="analytics")
+    bg.add_job(analytics.collect, "interval",
+               hours=cfg["analytics"]["pull_interval_hours"], id="analytics")
     bg.add_job(reposter.run, "interval", hours=24, id="reposter")
+
+    # Auto-refresh Instagram long-lived token every 45 days.
+    ig_pub = next((p for p in publishers if p.name == "instagram"
+                   and hasattr(p, "refresh_token")), None)
+    if ig_pub and cfg["instagram"].get("auto_refresh_token", True):
+        def _refresh_ig():
+            try:
+                ig_pub.refresh_token()
+                events.publish("ig.token_refreshed", "Instagram token auto-refreshed")
+                log.info("Instagram token auto-refreshed")
+            except Exception as exc:
+                log.exception("Instagram token auto-refresh failed")
+                events.publish("ig.token_refresh_failed",
+                               f"IG token refresh failed: {exc}",
+                               level="error", error=str(exc)[:200])
+
+        # First run 45 days from now so we don't hit the API needlessly on every restart.
+        bg.add_job(_refresh_ig, "interval", days=45, id="ig_refresh",
+                   next_run_time=datetime.now(timezone.utc) + timedelta(days=45))
+
     bg.start()
 
     handler = make_handler(cfg, db, scheduler, events)
@@ -157,13 +219,16 @@ def main(config_path: str = "config.yaml") -> int:
         uconfig = uvicorn.Config(app, host=host, port=port, log_level="warning", access_log=False)
         server = uvicorn.Server(uconfig)
         threading.Thread(target=server.run, name="cockpit", daemon=True).start()
-        events.publish("system.cockpit_started", f"cockpit at http://{host}:{port}", host=host, port=port)
+        events.publish("system.cockpit_started", f"cockpit at http://{host}:{port}",
+                       host=host, port=port)
         log.info("cockpit at http://%s:%s", host, port)
 
     stopping = False
+
     def stop(_sig, _frm):
         nonlocal stopping
         stopping = True
+
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
 

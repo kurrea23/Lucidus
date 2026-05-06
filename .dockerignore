@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+.env
+token.json
+ig_token.json
+data/
+videos/
+*.db
+.git

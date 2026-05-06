@@ -1,0 +1,29 @@
+[Unit]
+Description=Lucidus video repost automation
+After=network.target
+
+[Service]
+Type=simple
+# Edit these two lines to match your install.
+User=lucidus
+WorkingDirectory=/opt/lucidus
+
+# Use the venv python so all dependencies are available.
+ExecStart=/opt/lucidus/.venv/bin/python -m src.main config.yaml
+
+# Restart on crash but not on clean exit (exit code 0).
+Restart=on-failure
+RestartSec=10
+
+# Load .env automatically.
+EnvironmentFile=/opt/lucidus/.env
+
+# Limit file descriptors for large video uploads.
+LimitNOFILE=65536
+
+# Write logs to the journal (journalctl -u lucidus -f to follow).
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -16,10 +16,9 @@ class TikTokPublisher:
     """Publishes via TikTok Content Posting API (Direct Post).
 
     Requires:
-      - TikTok developer app approved for `video.publish` (or unaudited sandbox = SELF_ONLY visibility).
-      - User-authorized `access_token` with `video.publish` scope.
-      - This implementation uses the FILE_UPLOAD source. For PULL_FROM_URL, swap
-        the init request payload — see TikTok docs.
+      - TikTok developer app approved for `video.publish` (or unaudited sandbox = SELF_ONLY).
+      - User-authorized access_token with `video.publish` scope.
+      - For fetch_metrics: token also needs `video.list` scope.
     """
 
     name = "tiktok"
@@ -73,6 +72,8 @@ class TikTokPublisher:
             )
         up.raise_for_status()
 
+        # Poll until TikTok finishes processing.
+        video_id: Optional[str] = None
         deadline = time.time() + 600
         while time.time() < deadline:
             r = requests.post(
@@ -81,8 +82,12 @@ class TikTokPublisher:
                 json={"publish_id": publish_id},
                 timeout=30,
             ).json()
-            status = r.get("data", {}).get("status")
+            status_data = r.get("data", {})
+            status = status_data.get("status")
             if status == "PUBLISH_COMPLETE":
+                # TikTok returns the real video_id here — use it for metrics later.
+                post_ids = status_data.get("publicaly_available_post_id") or []
+                video_id = post_ids[0] if post_ids else None
                 break
             if status in ("FAILED", "PUBLISH_FAILED"):
                 raise RuntimeError(f"TikTok publish failed: {r}")
@@ -90,8 +95,34 @@ class TikTokPublisher:
         else:
             raise TimeoutError("TikTok publish status never completed")
 
-        return PublishResult(platform=self.name, remote_id=publish_id, permalink="")
+        # Store the real video_id as remote_id so fetch_metrics works.
+        # Fall back to publish_id if TikTok didn't return one (sandbox behaviour).
+        remote_id = video_id or publish_id
+        return PublishResult(platform=self.name, remote_id=remote_id, permalink="")
 
     def fetch_metrics(self, remote_id: str) -> Optional[Metrics]:
-        log.warning("TikTok metrics by publish_id not directly supported; needs video_id from /video/list/.")
-        return None
+        """Fetch stats via /v2/video/list/ (requires video.list scope on the token)."""
+        try:
+            r = requests.post(
+                f"{API}/video/list/",
+                headers={**self._headers(), "Content-Type": "application/json"},
+                json={
+                    "fields": ["id", "view_count", "like_count", "comment_count", "share_count"],
+                    "filters": {"video_ids": [remote_id]},
+                },
+                timeout=30,
+            )
+            r.raise_for_status()
+            videos = r.json().get("data", {}).get("videos", [])
+            if not videos:
+                return None
+            v = videos[0]
+            return Metrics(
+                views=v.get("view_count", 0),
+                likes=v.get("like_count", 0),
+                comments=v.get("comment_count", 0),
+                shares=v.get("share_count", 0),
+            )
+        except requests.RequestException:
+            log.exception("TikTok metrics fetch failed for %s", remote_id)
+            return None
