@@ -1,5 +1,5 @@
 /* ============================================================
-   Lucidus — Festival Planner
+   Festiplanner
    Single-module app: state store, views, sheets, router.
    Free tier: one festival. Pro: unlimited festivals + crew.
    ============================================================ */
@@ -41,14 +41,14 @@ const SPEND_CATS = { Ticket: '🎟️', Travel: '🚐', Stay: '⛺️', Food: '�
 
 /* ----------------------------- store ----------------------------- */
 
-const KEY = 'lucidus_v1';
+const KEY = 'festiplanner_v1';
 
 const defaultState = () => ({
   onboarded: false,
   user: { name: '', email: '' },
   premium: false,
   settings: { theme: 'dark', haptics: true, notifications: true },
-  inviteCode: 'LCD-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
+  inviteCode: 'FP-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
   friends: [],
   festivals: [],
   activeFestivalId: null,
@@ -270,7 +270,7 @@ function pageHead(title, { logo = false } = {}) {
 function viewOnboard() {
   const w = el(`<div class="onboard">
     <div class="ob-logo">🎪</div>
-    <h1>Lucidus</h1>
+    <h1>Festiplanner</h1>
     <p>Plan every festival like a pro. Schedules, packing, budget and your crew — in one place.</p>
     <div class="field" style="text-align:left">
       <label>Your name</label>
@@ -295,7 +295,7 @@ function viewOnboard() {
 
 function viewHome() {
   const w = document.createElement('div');
-  w.appendChild(pageHead('Lucidus', { logo: true }));
+  w.appendChild(pageHead('Festiplanner', { logo: true }));
   const f = activeFest();
 
   if (!f) {
@@ -648,7 +648,7 @@ function viewCrew() {
         <div class="lo-ico">🔒</div>
         <h3>Your crew runs on Pro</h3>
         <p>Invite friends, build a shared crew per festival, and split the packing list together.</p>
-        <button class="btn btn-gold" data-a="up">${I.spark} Unlock Lucidus Pro</button>
+        <button class="btn btn-gold" data-a="up">${I.spark} Unlock Festiplanner Pro</button>
       </div>
     </div>
     <div class="section-label">What you get</div>
@@ -677,7 +677,7 @@ function viewCrew() {
     catch { toast(S.inviteCode); }
   };
   codeCard.querySelector('[data-a="share"]').onclick = async () => {
-    const text = `Join my festival crew on Lucidus! Use code ${S.inviteCode}`;
+    const text = `Join my festival crew on Festiplanner! Use code ${S.inviteCode}`;
     if (navigator.share) { try { await navigator.share({ text }); } catch { /* user cancelled */ } }
     else { try { await navigator.clipboard.writeText(text); toast('Invite copied'); } catch { toast(text); } }
   };
@@ -692,7 +692,7 @@ function viewCrew() {
   addCard.querySelector('[data-a="add"]').onclick = () => {
     const v = addCard.querySelector('#fr-code').value.trim();
     if (!v) { toast('Enter a code or name'); return; }
-    const name = v.replace(/^LCD-/i, '').replace(/[^a-z0-9 ]/gi, '') || 'Friend';
+    const name = v.replace(/^FP-/i, '').replace(/[^a-z0-9 ]/gi, '') || 'Friend';
     S.friends.push({ id: uid(), name: name[0].toUpperCase() + name.slice(1), status: 'invited' });
     save(); haptic(); toast('Invite sent ✉️'); render();
     /* simulate the friend accepting shortly after */
@@ -771,7 +771,7 @@ function viewProfile() {
   const g = el('<div class="row-group"></div>');
 
   g.appendChild(rowBtn(I.profile, 'Edit Profile', null, sheetEditProfile));
-  g.appendChild(rowBtn(I.spark, S.premium ? 'Lucidus Pro' : 'Upgrade to Pro',
+  g.appendChild(rowBtn(I.spark, S.premium ? 'Festiplanner Pro' : 'Upgrade to Pro',
     S.premium ? 'Active — thanks for the support!' : 'Unlimited festivals + crew invites',
     S.premium ? () => toast('Pro is active ✨') : sheetPaywall));
   g.appendChild(rowBtn(I.crew, 'Friends', S.friends.length ? `${S.friends.length} friends` : 'Invite your crew', () => go('crew')));
@@ -844,7 +844,7 @@ function viewProfile() {
     });
   w.appendChild(danger);
 
-  w.appendChild(el('<div class="center muted mt24" style="font-size:13px;font-weight:600">Lucidus v1.0 · Made for festival people 🎪</div>'));
+  w.appendChild(el('<div class="center muted mt24" style="font-size:13px;font-weight:600">Festiplanner v1.0 · Made for festival people 🎪</div>'));
   return w;
 }
 
@@ -1064,7 +1064,7 @@ function sheetPaywall() {
   let plan = 'yearly';
   const c = el(`<div>
     <div class="paywall-hero">
-      <span class="pw-badge">${I.spark.replace('<svg', '<svg width="15" height="15"')} Lucidus Pro</span>
+      <span class="pw-badge">${I.spark.replace('<svg', '<svg width="15" height="15"')} Festiplanner Pro</span>
       <h2>The whole season.<br/>The whole crew.</h2>
       <p>Free covers one festival, solo. Pro unlocks everything else.</p>
     </div>
@@ -1102,7 +1102,7 @@ function sheetPaywall() {
 
 function sheetAbout() {
   const c = el(`<div>
-    <div class="sheet-title">🎪 Lucidus</div>
+    <div class="sheet-title">🎪 Festiplanner</div>
     <div class="sheet-sub">Your festival co-pilot.</div>
     <div class="card" style="background:var(--card-2)">
       <p class="muted" style="margin:0;line-height:1.6;font-size:15px">
@@ -1120,7 +1120,7 @@ function sheetAbout() {
 /* ----------------------------- export ----------------------------- */
 
 function exportReport() {
-  const lines = [`LUCIDUS — FESTIVAL REPORT`, `For: ${S.user.name}`, `Generated: ${new Date().toLocaleString()}`, ''];
+  const lines = [`FESTIPLANNER — FESTIVAL REPORT`, `For: ${S.user.name}`, `Generated: ${new Date().toLocaleString()}`, ''];
   for (const f of S.festivals) {
     lines.push(`${'='.repeat(40)}`, `${f.emoji} ${f.name.toUpperCase()} — ${fmtRange(f)}${f.location ? ' @ ' + f.location : ''}`, '');
     lines.push('SCHEDULE');
@@ -1139,7 +1139,7 @@ function exportReport() {
   const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'lucidus-report.txt';
+  a.download = 'festiplanner-report.txt';
   a.click();
   URL.revokeObjectURL(a.href);
   toast('Report downloaded 📄');
