@@ -1,4 +1,4 @@
-# 🎪 Lucidus — Festival Planner
+# 🎪 Festiplanner
 
 A full festival-planning app for festival goers with a clean, modern mobile design:
 near-black canvas, soft dark cards, heavy white type, uppercase micro-labels, pill toggles,
@@ -27,7 +27,7 @@ It's also an installable PWA (Add to Home Screen) and stores everything locally 
 - 📄 Export a full trip report
 - 🌗 Light/Dark appearance, haptics, local-only data, reset
 
-**Lucidus Pro (premium)**
+**Festiplanner Pro (premium)**
 - 🎪 **Unlimited festivals** — plan the whole season, switch between them with chips
 - 🫂 **Friend invites & crews** — share your invite code, add friends, build a crew per festival
 - 🎒 Shared packing — assign items to crew members

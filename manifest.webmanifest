@@ -1,6 +1,6 @@
 {
-  "name": "Lucidus — Festival Planner",
-  "short_name": "Lucidus",
+  "name": "Festiplanner",
+  "short_name": "Festiplanner",
   "description": "Plan every festival like a pro. Schedules, packing, budget and your crew.",
   "start_url": ".",
   "display": "standalone",
