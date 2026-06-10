@@ -1,6 +1,6 @@
 # 🎪 Lucidus — Festival Planner
 
-A full festival-planning app for festival goers, styled after the Pep AI design language:
+A full festival-planning app for festival goers with a clean, modern mobile design:
 near-black canvas, soft dark cards, heavy white type, uppercase micro-labels, pill toggles,
 and a glowing center action button.
 
