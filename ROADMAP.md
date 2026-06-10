@@ -1,97 +1,90 @@
 # Festiplanner — Product Roadmap
 
-Goal: take the working prototype to a genuinely useful, optimized festival-planning
-product. PWA-first, wrapped for the iOS App Store later. Real backend for accounts,
-sync, and friend invites. Premium = unlimited festivals + crew features.
+**What it is:** a trip-planning app branded for festivals. It covers everything between
+"we bought tickets" and "we're home" — crew, tickets, travel, lodging, money, gear,
+and the trip itinerary. It is NOT a set-schedule/lineup app; a small "don't-miss list"
+is the only artist-related feature.
+
+PWA-first, wrapped for the iOS App Store later. Real backend for accounts, sync and
+friend invites. Premium = multiple festival trips + crew collaboration.
 
 ---
 
-## Phase 0 — Prototype ✅ (done)
+## The trip model
 
-Dark-card design system, onboarding, festival CRUD with live countdown, schedule
-builder with clash detection, packing list with progress, budget tracker, demo
-paywall, simulated friends, light/dark themes, GitHub Pages deploy.
+Every festival is a **Trip** that moves through phases. The app's job is to always
+answer: *"what do we still need to sort out?"*
+
+1. **Lock it in** — festival, dates, crew RSVPs (in/maybe/out), ticket tracker per
+   person (needed → bought → in hand)
+2. **Getting there** — travel mode, departure/return times, car assignments & rides,
+   flight info
+3. **Staying** — camping/hotel/Airbnb details, check-in/out, confirmation numbers,
+   campsite pin
+4. **Money** — big three upfront (ticket/travel/stay), shared expenses, who-owes-who
+   settle-up
+5. **Gear & packing** — personal list + shared gear with owners ("who's bringing the
+   tent")
+6. **Trip itinerary** — day-by-day logistics blocks: set off, grocery stop, check-in,
+   gates open, pack down
+7. **Info hub** — ticket photos, confirmations, venue address, rules, meetup point,
+   ICE contacts; fully offline
+
+**Home = trip readiness score** ("7 of 9 sorted") + countdown + the next milestone,
+not artist sets.
 
 ---
 
-## Phase 1 — Make it genuinely useful (no backend needed)
+## Phase 1 — Trip-first core ✅ (this build)
 
-The features that make someone open the app every day of festival week.
+- Trip readiness score with next-milestone nudge on Home
+- Ticket tracker per crew member with price + status
+- Travel plan (mode, depart/return, rides) and Stay (type, address, check-in/out, conf#)
+- Trip itinerary: day strip spanning departure → return, logistics stops, starter template
+- Shared expenses: payer + even split across crew, settle-up balances
+- Shared gear: packing items flagged shared with an assigned owner
+- Info hub: venue address, meetup point, rules, ICE contact
+- Don't-miss list (minor module): a handful of acts you refuse to miss
+- Premium unchanged: free = one trip solo; Pro = multiple trips + crew invites
 
-**Schedule, leveled up**
-- Visual timeline view: stages as columns, sets as blocks, overlaps visibly collide
-- "Live mode" during the festival: now playing / up next pinned to Home, auto-scrolling today
-- Bulk lineup entry: paste a lineup ("9:00 Artist - Stage" lines) and parse it into sets
-- Edit sets in place (currently add/delete only)
-- Set reminders via Web Notifications (15 min warning, configurable)
+## Phase 2 — Useful depth (still no backend)
 
-**Trip logistics**
-- Weather forecast for festival dates/location (Open-Meteo, free, no key) on Home
-  and as packing suggestions ("rain expected — poncho added?")
-- Important info card: ticket/wristband photos, campsite spot, parking lot, locker number
-- Getting-there checklist: set-off time, ride share splits
+- Service worker: full offline (no signal at the gate — info hub must always open)
+- Photo attachments in the info hub (ticket QR, confirmation screenshots) via IndexedDB
+- Weather forecast for trip dates (Open-Meteo) feeding packing suggestions
+- Settle-up improvements: per-expense custom splits, "mark settled"
+- Reminders: set-off time, check-in/out, don't-miss acts (Web Notifications)
+- Undo for deletes, swipe gestures, app icons, Lighthouse PWA 100
 
-**Budget, leveled up**
-- Cost splitting: mark expenses as shared, see per-person share and who-owes-who settle-up
-- Pre-festival vs on-site spending split; daily spend during live mode
+## Phase 3 — Real backend (Supabase)
 
-**Quality & optimization**
-- Service worker: full offline support (festival grounds have no signal — this is critical)
-- Proper app icons + splash screens, Lighthouse PWA score 100
-- Undo for deletes (toast with Undo button) instead of confirm sheets everywhere
-- Swipe gestures on rows (complete / delete), pull-to-refresh
-- Empty/loading/error states audit; accessibility pass (focus traps in sheets, ARIA)
+- Sign in with Apple / Google / magic link; local data migrates into the account
+- Offline-first sync with conflict resolution
+- Schema: `profiles`, `trips`, `trip_members` (rsvp + role), `tickets`, `travel_legs`,
+  `rides`, `stays`, `itinerary_items`, `packing_items`, `expenses`, `expense_splits`,
+  `friendships`, `invites`
+- Real invite links: `/join/FP-XXXX` deep link joins the trip
+- Live crew collaboration: RSVPs, ticket statuses, gear claims, expense feed all sync
+- Push: "Maya marked the tent covered", "set-off in 2 hours", "Jake paid $80 gas"
 
-## Phase 2 — Real backend (Supabase)
+## Phase 4 — Premium & payments
 
-Accounts, sync, and real friends. Supabase free tier: Postgres + Auth + Realtime + Row
-Level Security, works straight from a static PWA.
+- Entitlements server-side; free = 1 trip solo, Pro = unlimited trips + crew
+- Stripe Checkout on web ($4.99/mo, $29.99/yr); 7-day trial triggered by first invite
+- Polished PDF trip report (replaces .txt export)
 
-**Auth & sync**
-- Sign in with Apple / Google / magic link; anonymous-to-account upgrade path
-  (local data migrates into the account on first sign-in)
-- Offline-first: localStorage stays the source of truth on-device, background sync
-  with conflict resolution (last-write-wins per field, tombstones for deletes)
+## Phase 5 — App Store
 
-**Schema**
-`profiles`, `festivals`, `festival_members` (role: owner/member), `sets`,
-`set_rsvps` (who's going to which set), `packing_items` (assignee), `expenses`
-(payer + split members), `friendships`, `invites` (code, expiry)
+- Capacitor wrap: native haptics, share sheet, push, biometric lock
+- StoreKit IAP replacing Stripe inside the iOS build
+- ASO: "festival trip planner", "festival packing list", "group trip planner"
 
-**Real crew features (the premium core)**
-- Invite links that actually work: `https://<domain>/join/FP-XXXX` deep link → joins crew
-- Shared festival: crew members see the same lineup, RSVP independently
-- "Who's going where": friend avatars on each set, clash view across the crew
-- Shared packing list with assignments and live check-off
-- Shared expenses with real settle-up across accounts
-- Crew chat-lite: pinned notes / meet-up point per festival ("left of soundboard 21:00")
+## Phase 6 — Growth
 
-**Push**
-- Web Push: set reminders, "X joined your crew", "Y RSVP'd to the same set"
-
-## Phase 3 — Premium & payments
-
-- Entitlements live in the backend (not a local flag)
-- Free: 1 festival, solo. Pro: unlimited festivals, crew features, exports
-- Web: Stripe Checkout + customer portal ($4.99/mo, $29.99/yr)
-- 7-day Pro trial on first crew invite (the hook moment)
-- Polished PDF trip report export (replaces .txt)
-
-## Phase 4 — App Store
-
-- Wrap with Capacitor: native haptics, share sheet, push, biometric lock
-- StoreKit in-app purchase replacing Stripe inside the iOS build
-- App Store assets: screenshots, preview video, ASO keywords
-  ("festival planner", "festival schedule", "rave planner")
-
-## Phase 5 — Growth & polish
-
-- Festival lineup database integration (community-submitted lineups; explore
-  public APIs/partnerships) so users pick their festival and the lineup is pre-loaded
-- Memories: photo journal per festival day, year-in-review recap
-- Friend profiles, festival history, "festivals together" stats
-- Privacy-friendly analytics (Plausible) to tune onboarding funnel
-- i18n groundwork (EU festival market is huge)
+- Festival database: pick your festival → dates, venue address, rules pre-filled
+- Trip recap: total spent, miles traveled, photos, "trip #4 with Maya"
+- Templates marketplace: share packing/itinerary templates per festival
+- Privacy-friendly analytics, i18n groundwork
 
 ---
 
@@ -99,9 +92,9 @@ Level Security, works straight from a static PWA.
 
 | Sprint | Scope |
 |---|---|
-| 1 | Offline service worker, icons, timeline view, set editing, bulk lineup paste |
-| 2 | Weather, live mode, notifications, info card, undo/swipe polish |
+| 1 | ✅ Trip-first rebuild (this PR) |
+| 2 | Offline service worker, info-hub photos, weather, reminders, polish |
 | 3 | Supabase auth + schema + sync |
-| 4 | Real invites, shared crew schedule, shared packing/expenses |
+| 4 | Real invites + live crew collaboration |
 | 5 | Stripe + entitlements, PDF reports |
 | 6 | Capacitor + App Store submission |
