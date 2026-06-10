@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0c" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="Lucidus — plan every festival like a pro. Schedules, packing, budget and your crew, all in one place." />
+  <title>Lucidus — Festival Planner</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <main id="view" class="view"></main>
+
+    <nav class="tabbar" id="tabbar">
+      <button class="tab" data-tab="home">
+        <span class="tab-icon" data-icon="home"></span>
+        <span class="tab-label">Home</span>
+      </button>
+      <button class="tab" data-tab="plan">
+        <span class="tab-icon" data-icon="plan"></span>
+        <span class="tab-label">Plan</span>
+      </button>
+      <button class="tab tab-add" data-tab="add" aria-label="Quick add">
+        <span class="tab-icon" data-icon="plus"></span>
+      </button>
+      <button class="tab" data-tab="crew">
+        <span class="tab-icon" data-icon="crew"></span>
+        <span class="tab-label">Crew</span>
+      </button>
+      <button class="tab" data-tab="profile">
+        <span class="tab-icon" data-icon="profile"></span>
+        <span class="tab-label">Profile</span>
+      </button>
+    </nav>
+
+    <div id="sheet-root"></div>
+    <div id="toast-root"></div>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
