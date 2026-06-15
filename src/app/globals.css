@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  /* Warm sand */
+  --color-sand-50: #fbf8f2;
+  --color-sand-100: #f5eede;
+  --color-sand-200: #eadfc4;
+  --color-sand-300: #dcc89c;
+  --color-sand-400: #ccae72;
+  --color-sand-500: #bd9750;
+
+  /* Deep blue */
+  --color-ocean-50: #f0f6fa;
+  --color-ocean-100: #dcebf3;
+  --color-ocean-200: #bdd8e8;
+  --color-ocean-300: #8fbcd6;
+  --color-ocean-400: #5b9abd;
+  --color-ocean-500: #3a7da3;
+  --color-ocean-600: #2b6489;
+  --color-ocean-700: #245270;
+  --color-ocean-800: #21455d;
+  --color-ocean-900: #1f3b4f;
+  --color-ocean-950: #142634;
+
+  /* Charcoal text */
+  --color-charcoal-400: #8a877f;
+  --color-charcoal-500: #6b6862;
+  --color-charcoal-700: #44423d;
+  --color-charcoal-900: #262522;
+
+  /* Neon accent — Festival Mode */
+  --color-neon-100: #fae8ff;
+  --color-neon-300: #f0abfc;
+  --color-neon-400: #e879f9;
+  --color-neon-500: #d946ef;
+  --color-neon-600: #c026d3;
+  --color-neon-700: #a21caf;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+body {
+  @apply bg-sand-50 text-charcoal-900;
+}
