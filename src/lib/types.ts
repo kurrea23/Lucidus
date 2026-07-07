@@ -89,6 +89,8 @@ export type UserProfile = {
   displayName: string;
   plan: UserPlan;
   createdAt: string;
+  /** True when this state belongs to a signed-in Supabase account. */
+  isCloud?: boolean;
 };
 
 export type TravelProfile = {

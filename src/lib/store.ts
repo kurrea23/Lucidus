@@ -10,16 +10,19 @@ import type {
   TravelTask,
   Trip,
   TripInterviewInput,
+  UserPlan,
   UserProfile,
 } from "./types";
 import { addDays, todayISO, uid } from "./utils";
 
 /**
- * TripCooker local demo mode store.
+ * TripCooker store.
  *
- * All data lives in localStorage under a single key. The shape mirrors the
- * Supabase schema in supabase/schema.sql so the storage layer can be swapped
- * for real auth + Postgres without touching the UI.
+ * Local-first: all data lives in localStorage under a single key, so the app
+ * works with zero configuration ("demo mode"). When Supabase cloud mode is
+ * active (user signed in), every mutation is also mirrored to Postgres via
+ * the remote sink registered by src/lib/supabase/sync.ts. The shape mirrors
+ * supabase/schema.sql so the two stay interchangeable.
  */
 
 export type DB = {
@@ -121,6 +124,52 @@ export function useDB(): DB {
   return useSyncExternalStore(subscribe, readDB, () => SERVER_DB);
 }
 
+/* ---------------------------- Cloud mirroring ---------------------------- */
+
+export type RemoteTable =
+  | "users"
+  | "travel_profiles"
+  | "trips"
+  | "itinerary_items"
+  | "budget_items"
+  | "packing_items"
+  | "travel_tasks"
+  | "festival_details";
+
+export type RemoteSink = {
+  upsert(table: RemoteTable, entity: unknown): void;
+  remove(table: RemoteTable, id: string): void;
+};
+
+let remoteSink: RemoteSink | null = null;
+
+export function setRemoteSink(sink: RemoteSink | null) {
+  remoteSink = sink;
+}
+
+function pushRemote(table: RemoteTable, entity: unknown) {
+  if (entity) remoteSink?.upsert(table, entity);
+}
+
+function removeRemote(table: RemoteTable, id: string) {
+  remoteSink?.remove(table, id);
+}
+
+/** Direct read access for the sync layer (not a React hook). */
+export function getLocalDB(): DB {
+  return readDB();
+}
+
+/** Replace the whole local state (cloud pull / sign-out). Pass null to reset. */
+export function replaceAll(db: DB | null) {
+  writeDB(db ?? emptyDB());
+}
+
+/** Applied by the sync layer after checking the server — never mirrored back. */
+export function updateLocalPlan(plan: UserPlan) {
+  mutate((db) => ({ ...db, user: { ...db.user, plan } }));
+}
+
 /* ------------------------------ Selectors ------------------------------ */
 
 export function activeTrips(db: DB): Trip[] {
@@ -165,6 +214,7 @@ export function tripFestival(db: DB, tripId: string): FestivalDetails | undefine
 
 export function updateUser(patch: Partial<UserProfile>) {
   mutate((db) => ({ ...db, user: { ...db.user, ...patch } }));
+  pushRemote("users", readDB().user);
 }
 
 export function saveTravelProfile(dna: GeneratedTripPlan["travelDNA"]) {
@@ -183,6 +233,7 @@ export function saveTravelProfile(dna: GeneratedTripPlan["travelDNA"]) {
       createdAt: db.travelProfile?.createdAt ?? new Date().toISOString(),
     },
   }));
+  pushRemote("travel_profiles", readDB().travelProfile);
 }
 
 export function createTripFromPlan(
@@ -287,6 +338,13 @@ export function createTripFromPlan(
     festivalDetails: [...db.festivalDetails, ...festivalDetails],
   }));
 
+  pushRemote("trips", trip);
+  budgetItems.forEach((b) => pushRemote("budget_items", b));
+  packingItems.forEach((p) => pushRemote("packing_items", p));
+  travelTasks.forEach((t) => pushRemote("travel_tasks", t));
+  itineraryItems.forEach((i) => pushRemote("itinerary_items", i));
+  festivalDetails.forEach((f) => pushRemote("festival_details", f));
+
   return tripId;
 }
 
@@ -295,6 +353,7 @@ export function updateTrip(tripId: string, patch: Partial<Trip>) {
     ...db,
     trips: db.trips.map((t) => (t.id === tripId ? { ...t, ...patch } : t)),
   }));
+  pushRemote("trips", getTrip(readDB(), tripId));
 }
 
 export function deleteTrip(tripId: string) {
@@ -307,18 +366,16 @@ export function deleteTrip(tripId: string) {
     travelTasks: db.travelTasks.filter((i) => i.tripId !== tripId),
     festivalDetails: db.festivalDetails.filter((f) => f.tripId !== tripId),
   }));
+  // Child rows cascade server-side (on delete cascade).
+  removeRemote("trips", tripId);
 }
 
 /* Itinerary */
 
 export function addItineraryItem(item: Omit<ItineraryItem, "id" | "createdAt">) {
-  mutate((db) => ({
-    ...db,
-    itineraryItems: [
-      ...db.itineraryItems,
-      { ...item, id: uid(), createdAt: new Date().toISOString() },
-    ],
-  }));
+  const full: ItineraryItem = { ...item, id: uid(), createdAt: new Date().toISOString() };
+  mutate((db) => ({ ...db, itineraryItems: [...db.itineraryItems, full] }));
+  pushRemote("itinerary_items", full);
 }
 
 export function updateItineraryItem(id: string, patch: Partial<ItineraryItem>) {
@@ -326,6 +383,7 @@ export function updateItineraryItem(id: string, patch: Partial<ItineraryItem>) {
     ...db,
     itineraryItems: db.itineraryItems.map((i) => (i.id === id ? { ...i, ...patch } : i)),
   }));
+  pushRemote("itinerary_items", readDB().itineraryItems.find((i) => i.id === id));
 }
 
 export function deleteItineraryItem(id: string) {
@@ -333,18 +391,15 @@ export function deleteItineraryItem(id: string) {
     ...db,
     itineraryItems: db.itineraryItems.filter((i) => i.id !== id),
   }));
+  removeRemote("itinerary_items", id);
 }
 
 /* Budget */
 
 export function addBudgetItem(item: Omit<BudgetItem, "id" | "createdAt">) {
-  mutate((db) => ({
-    ...db,
-    budgetItems: [
-      ...db.budgetItems,
-      { ...item, id: uid(), createdAt: new Date().toISOString() },
-    ],
-  }));
+  const full: BudgetItem = { ...item, id: uid(), createdAt: new Date().toISOString() };
+  mutate((db) => ({ ...db, budgetItems: [...db.budgetItems, full] }));
+  pushRemote("budget_items", full);
 }
 
 export function updateBudgetItem(id: string, patch: Partial<BudgetItem>) {
@@ -352,6 +407,7 @@ export function updateBudgetItem(id: string, patch: Partial<BudgetItem>) {
     ...db,
     budgetItems: db.budgetItems.map((i) => (i.id === id ? { ...i, ...patch } : i)),
   }));
+  pushRemote("budget_items", readDB().budgetItems.find((i) => i.id === id));
 }
 
 export function deleteBudgetItem(id: string) {
@@ -359,18 +415,15 @@ export function deleteBudgetItem(id: string) {
     ...db,
     budgetItems: db.budgetItems.filter((i) => i.id !== id),
   }));
+  removeRemote("budget_items", id);
 }
 
 /* Packing */
 
 export function addPackingItem(item: Omit<PackingItem, "id" | "createdAt">) {
-  mutate((db) => ({
-    ...db,
-    packingItems: [
-      ...db.packingItems,
-      { ...item, id: uid(), createdAt: new Date().toISOString() },
-    ],
-  }));
+  const full: PackingItem = { ...item, id: uid(), createdAt: new Date().toISOString() };
+  mutate((db) => ({ ...db, packingItems: [...db.packingItems, full] }));
+  pushRemote("packing_items", full);
 }
 
 export function togglePackingItem(id: string) {
@@ -380,6 +433,7 @@ export function togglePackingItem(id: string) {
       i.id === id ? { ...i, isPacked: !i.isPacked } : i
     ),
   }));
+  pushRemote("packing_items", readDB().packingItems.find((i) => i.id === id));
 }
 
 export function deletePackingItem(id: string) {
@@ -387,18 +441,15 @@ export function deletePackingItem(id: string) {
     ...db,
     packingItems: db.packingItems.filter((i) => i.id !== id),
   }));
+  removeRemote("packing_items", id);
 }
 
 /* Tasks */
 
 export function addTravelTask(item: Omit<TravelTask, "id" | "createdAt">) {
-  mutate((db) => ({
-    ...db,
-    travelTasks: [
-      ...db.travelTasks,
-      { ...item, id: uid(), createdAt: new Date().toISOString() },
-    ],
-  }));
+  const full: TravelTask = { ...item, id: uid(), createdAt: new Date().toISOString() };
+  mutate((db) => ({ ...db, travelTasks: [...db.travelTasks, full] }));
+  pushRemote("travel_tasks", full);
 }
 
 export function toggleTravelTask(id: string) {
@@ -406,6 +457,7 @@ export function toggleTravelTask(id: string) {
     ...db,
     travelTasks: db.travelTasks.map((t) => (t.id === id ? { ...t, isDone: !t.isDone } : t)),
   }));
+  pushRemote("travel_tasks", readDB().travelTasks.find((t) => t.id === id));
 }
 
 export function deleteTravelTask(id: string) {
@@ -413,6 +465,7 @@ export function deleteTravelTask(id: string) {
     ...db,
     travelTasks: db.travelTasks.filter((t) => t.id !== id),
   }));
+  removeRemote("travel_tasks", id);
 }
 
 /* Festival details */
@@ -447,8 +500,10 @@ export function upsertFestivalDetails(tripId: string, patch: Partial<FestivalDet
       ],
     };
   });
+  pushRemote("festival_details", readDB().festivalDetails.find((f) => f.tripId === tripId));
 }
 
+/** Local-only reset — never touches cloud data. */
 export function resetAll() {
   writeDB(emptyDB());
 }

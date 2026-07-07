@@ -7,12 +7,15 @@ import {
   ChefHat,
   Crown,
   LayoutDashboard,
+  LogIn,
+  LogOut,
   Map,
   Settings,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { activeTrips, useDB } from "@/lib/store";
+import { getSupabase, isCloudEnabled } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
 
 const NAV = [
@@ -97,7 +100,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
         )}
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col gap-2">
+          {isCloudEnabled() &&
+            (db.user.isCloud ? (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-sand-200 px-3 py-2">
+                <span className="truncate text-xs text-charcoal-500" title={db.user.email}>
+                  {db.user.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void getSupabase()?.auth.signOut()}
+                  className="shrink-0 text-charcoal-400 hover:text-charcoal-900 cursor-pointer"
+                  title="Sign out"
+                  aria-label="Sign out"
+                >
+                  <LogOut className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="flex items-center gap-2 rounded-xl border border-sand-200 px-3 py-2 text-sm font-medium text-charcoal-700 hover:border-ocean-300"
+              >
+                <LogIn className="size-4 text-ocean-600" />
+                Sign in / Create account
+              </Link>
+            ))}
           {db.user.plan === "premium" ? (
             <Badge variant="blue" className="w-full justify-center py-1.5">
               <Crown className="size-3" /> Travel Season Pro
@@ -122,9 +150,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Mobile header */}
         <header className="md:hidden sticky top-0 z-20 flex items-center justify-between border-b border-sand-200 bg-white px-4 py-3">
           <Logo />
-          <Badge variant={db.user.plan === "premium" ? "blue" : "default"}>
-            {db.user.plan === "premium" ? "Pro" : "Free"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {isCloudEnabled() && !db.user.isCloud && (
+              <Link href="/login" aria-label="Sign in" className="text-ocean-700">
+                <LogIn className="size-5" />
+              </Link>
+            )}
+            <Badge variant={db.user.plan === "premium" ? "blue" : "default"}>
+              {db.user.plan === "premium" ? "Pro" : "Free"}
+            </Badge>
+          </div>
         </header>
 
         <main className="flex-1 pb-24 md:pb-10">{children}</main>

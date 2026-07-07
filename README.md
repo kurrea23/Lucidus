@@ -72,5 +72,47 @@ Trip** (or **View Demo** to seed a sample EDC Las Vegas festival trip).
 ## Deploying
 
 Deploy to [Vercel](https://vercel.com) — no environment variables required for
-demo mode. To go beyond the MVP, provision a Supabase project with
-`supabase/schema.sql` and swap the store layer.
+demo mode.
+
+## Cloud mode: real accounts + payments
+
+The app runs in **local demo mode** by default (trips save per-browser, the
+Premium button is a demo). Adding environment variables switches on real
+functionality — no code changes needed:
+
+### 1. Accounts + synced trips (Supabase)
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the SQL editor, paste and run all of [`supabase/schema.sql`](supabase/schema.sql)
+   (tables, row-level security, signup trigger).
+3. For easy testing, turn off email confirmation: Authentication → Sign In /
+   Providers → Email → disable "Confirm email" (re-enable for production).
+4. Set env vars (locally in `.env.local`, on Vercel in Project → Settings →
+   Environment Variables):
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+With these set, the app shows Sign in / Create account. On first sign-in, any
+local demo trips migrate into the account, and every change syncs to Postgres.
+`users.plan` is server-controlled — column-level grants stop clients from
+giving themselves premium.
+
+### 2. Real payments (Stripe)
+
+1. Create a [Stripe](https://stripe.com) account. In Product catalog, create a
+   product ("Travel Season Pro") with two recurring prices: $7.99/month and
+   $59/year. Copy both price IDs.
+2. Add a webhook endpoint: Developers → Webhooks → Add endpoint →
+   `https://YOUR-APP-URL/api/stripe-webhook`, subscribed to
+   `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted`. Copy the signing secret.
+3. Set env vars: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+   `STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_YEARLY`,
+   `SUPABASE_SERVICE_ROLE_KEY` (server-only), `NEXT_PUBLIC_APP_URL`.
+
+Signed-in users then get real Stripe checkout on `/premium`; the webhook flips
+`users.plan` to `premium` on payment and back to `free` on cancellation. Until
+these vars exist, checkout returns 501 and the UI explains payments aren't
+switched on — nothing breaks.
+
+See [`.env.example`](.env.example) for the full list.
