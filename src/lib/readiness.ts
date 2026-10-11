@@ -63,7 +63,7 @@ export function readinessCopy(score: number): string {
   if (score <= 50) return "Half-prepped — your trip has shape.";
   if (score <= 75) return "Mostly cooked — a few details need attention.";
   if (score <= 99) return "Almost ready — final checks left.";
-  return "Fully cooked — you're ready to go.";
+  return "Planning checks complete — verify bookings and finish packing.";
 }
 
 export type NextAction = {

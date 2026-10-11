@@ -14,6 +14,8 @@ import {
 import { cn } from "@/lib/utils";
 import { activeTrips, useDB } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
+import { AccountGate } from "./account-provider";
+import { SaveStatus } from "./save-status";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -60,7 +62,7 @@ function NavLink({
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, publicPage = false }: { children: React.ReactNode; publicPage?: boolean }) {
   const pathname = usePathname();
   const db = useDB();
   const trips = activeTrips(db);
@@ -110,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Sparkles className="size-4 text-ocean-600 shrink-0" />
               <span>
                 <span className="font-semibold block text-charcoal-900">Build your travel year</span>
-                Unlock unlimited trips with Premium.
+                Unlock multiple trips with Premium.
               </span>
             </Link>
           )}
@@ -127,7 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Badge>
         </header>
 
-        <main className="flex-1 pb-24 md:pb-10">{children}</main>
+        <main className="flex-1 pb-24 md:pb-10">{publicPage ? children : <AccountGate><SaveStatus />{children}</AccountGate>}</main>
 
         {/* Mobile bottom nav */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 flex border-t border-sand-200 bg-white">

@@ -2,7 +2,7 @@
 
 **Cook one trip free. Build your travel year with Premium.**
 
-TripCooker is an AI-powered travel planning app that interviews you first,
+TripCooker is a travel planning app that interviews you first,
 learns your travel style, and "cooks" a personalized trip plan — dashboard,
 itinerary, budget, packing checklist, and travel tasks. Festival Mode swaps in
 everything an event trip actually needs (wristbands, hydration packs, meetup
@@ -43,7 +43,7 @@ Premium gate for multiple trips.
   swapped in without UI changes.
 - `aiTripPlanner()` (`src/lib/ai-trip-planner.ts`) returns structured JSON
   from the interview answers. The MVP uses a deterministic template planner;
-  it is the seam where a real model call goes when an API key is configured.
+  No external model or AI concierge is part of the supported launch offer.
 
 ## Getting started
 
@@ -69,8 +69,29 @@ Trip** (or **View Demo** to seed a sample EDC Las Vegas festival trip).
 | `/premium` | Pricing + demo upgrade |
 | `/settings` | Profile, plan, Travel DNA, data reset |
 
-## Deploying
+## Live accounts and billing
 
-Deploy to [Vercel](https://vercel.com) — no environment variables required for
-demo mode. To go beyond the MVP, provision a Supabase project with
-`supabase/schema.sql` and swap the store layer.
+The launch branch supports an explicit `NEXT_PUBLIC_APP_MODE=live`:
+
+- Supabase email-code sign-in with verified server authentication.
+- Private account snapshots, versioned saves, conflict reporting and export.
+- Server-enforced one-active-trip free limit.
+- Stripe Checkout and billing portal; the server reads current Stripe subscription status.
+- Monthly $7.99 and yearly $59 configured price validation.
+- Completed trips/archive and calendar totals by departure year.
+
+The default is a labeled browser demo with no payments. Never deploy that as the paid product.
+Apply `supabase/launch.sql` to a new project, configure `.env.example`, and follow
+[launch setup and acceptance](docs/launch-readiness.md). Do not use `schema.sql` as
+production security; it is a reference for the earlier demo and lacks RLS.
+
+```bash
+npm ci
+npm test
+npm run lint
+npm run build
+npm run check:launch
+```
+
+Local checks and simulated provider responses do not prove a live purchase or cross-device account saving.
+Vercel production builds reject missing live configuration; preview/local builds allow the demo.

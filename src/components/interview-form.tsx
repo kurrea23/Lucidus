@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,7 +21,14 @@ import {
   Users,
 } from "lucide-react";
 import { aiTripPlanner } from "@/lib/ai-trip-planner";
-import { canCreateTrip, createTripFromPlan, saveTravelProfile, useDB } from "@/lib/store";
+import {
+  canCreateTrip,
+  createTripFromPlan,
+  saveTravelProfile,
+  useDB,
+} from "@/lib/store";
+import { AccountGate } from "./account-provider";
+import { SaveStatus } from "./save-status";
 import { PremiumGateCard } from "@/components/premium-gate-card";
 import {
   type FoodStyle,
@@ -119,7 +126,7 @@ function Chip({
           ? neon
             ? "border-neon-600 bg-neon-600 text-white"
             : "border-ocean-700 bg-ocean-700 text-white"
-          : "border-sand-300 bg-white text-charcoal-700 hover:border-ocean-400"
+          : "border-sand-300 bg-white text-charcoal-700 hover:border-ocean-400",
       )}
     >
       {children}
@@ -146,7 +153,9 @@ function ChipGroup<T extends string>({
           selected={value.includes(opt)}
           onClick={() =>
             onChange(
-              value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]
+              value.includes(opt)
+                ? value.filter((v) => v !== opt)
+                : [...value, opt],
             )
           }
         >
@@ -276,6 +285,16 @@ const INITIAL: FormState = {
 /* --------------------------------- Steps --------------------------------- */
 
 export function InterviewForm() {
+  const pathname = usePathname();
+  return (
+    <AccountGate>
+      {pathname === "/onboarding" && <SaveStatus />}
+      <InterviewContent />
+    </AccountGate>
+  );
+}
+
+function InterviewContent() {
   const router = useRouter();
   const db = useDB();
   const [form, setForm] = useState<FormState>(INITIAL);
@@ -285,8 +304,23 @@ export function InterviewForm() {
 
   const isFestival = form.tripType === "festival";
   const steps = isFestival
-    ? ["Trip type", "Basics", "Style", "Budget", "Stay & moves", "Food & stress", "Festival"]
-    : ["Trip type", "Basics", "Style", "Budget", "Stay & moves", "Food & stress"];
+    ? [
+        "Trip type",
+        "Basics",
+        "Style",
+        "Budget",
+        "Stay & moves",
+        "Food & stress",
+        "Festival",
+      ]
+    : [
+        "Trip type",
+        "Basics",
+        "Style",
+        "Budget",
+        "Stay & moves",
+        "Food & stress",
+      ];
   const lastStep = steps.length - 1;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -296,7 +330,8 @@ export function InterviewForm() {
     if (step === 1) {
       if (!form.destination.trim()) return "Tell us where you're going.";
       if (!form.startDate || !form.endDate) return "Pick your trip dates.";
-      if (form.endDate < form.startDate) return "Your return date is before you leave.";
+      if (form.endDate < form.startDate)
+        return "Your return date is before you leave.";
     }
     if (step === 3 && (!form.budget || form.budget <= 0))
       return "Give us a rough budget — you can change it later.";
@@ -346,13 +381,22 @@ export function InterviewForm() {
         : undefined,
     };
 
-    const plan = await aiTripPlanner(input);
-    // Brief pause so "cooking" feels like work is happening, before the store
-    // write makes the free-plan gate kick in elsewhere.
-    await new Promise((r) => setTimeout(r, 900));
-    saveTravelProfile(plan.travelDNA);
-    const tripId = createTripFromPlan(input, plan);
-    router.push(`/trips/${tripId}`);
+    try {
+      const plan = await aiTripPlanner(input);
+      // Brief pause so "cooking" feels like work is happening, before the store
+      // write makes the free-plan gate kick in elsewhere.
+      await new Promise((r) => setTimeout(r, 900));
+      saveTravelProfile(plan.travelDNA);
+      const tripId = createTripFromPlan(input, plan);
+      router.push(`/trips/${tripId}`);
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Trip cooking failed. Please try again.",
+      );
+      setCooking(false);
+    }
   }
 
   function next() {
@@ -383,8 +427,8 @@ export function InterviewForm() {
         </span>
         <h2 className="text-xl font-bold">Cooking your trip…</h2>
         <p className="max-w-sm text-sm text-charcoal-500">
-          Building your Travel DNA, itinerary, budget, packing list, and task list
-          from your answers.
+          Building your Travel DNA, itinerary, budget, packing list, and task
+          list from your answers.
         </p>
         <Loader2 className="size-5 animate-spin text-ocean-600" />
       </Card>
@@ -406,7 +450,9 @@ export function InterviewForm() {
       <Card className="p-6">
         {step === 0 && (
           <div>
-            <h2 className="text-xl font-bold">What kind of trip are we cooking?</h2>
+            <h2 className="text-xl font-bold">
+              What kind of trip are we cooking?
+            </h2>
             <p className="mt-1 text-sm text-charcoal-500">
               This shapes your checklist, budget, and itinerary.
             </p>
@@ -422,7 +468,7 @@ export function InterviewForm() {
                       ? value === "festival"
                         ? "border-neon-600 bg-neon-100 text-neon-700"
                         : "border-ocean-700 bg-ocean-50 text-ocean-800"
-                      : "border-sand-200 bg-white text-charcoal-700 hover:border-ocean-300"
+                      : "border-sand-200 bg-white text-charcoal-700 hover:border-ocean-300",
                   )}
                 >
                   <Icon className="size-5" />
@@ -481,14 +527,23 @@ export function InterviewForm() {
               </div>
             </div>
             <Question label="Are your dates flexible?">
-              <YesNo value={form.flexibleDates} onChange={(v) => set("flexibleDates", v)} />
+              <YesNo
+                value={form.flexibleDates}
+                onChange={(v) => set("flexibleDates", v)}
+              />
             </Question>
             <Question label="Traveling solo or with others?">
               <div className="flex items-center gap-3">
                 <SingleChipGroup
                   options={["1", "2", "3", "4", "5+"] as const}
-                  value={form.travelerCount >= 5 ? "5+" : (String(form.travelerCount) as "1")}
-                  onChange={(v) => set("travelerCount", v === "5+" ? 5 : Number(v))}
+                  value={
+                    form.travelerCount >= 5
+                      ? "5+"
+                      : (String(form.travelerCount) as "1")
+                  }
+                  onChange={(v) =>
+                    set("travelerCount", v === "5+" ? 5 : Number(v))
+                  }
                 />
                 <span className="text-sm text-charcoal-500">travelers</span>
               </div>
@@ -516,14 +571,22 @@ export function InterviewForm() {
           <div className="space-y-5">
             <h2 className="text-xl font-bold">Your travel style</h2>
             <Question label="What vibe do you want? (pick any)">
-              <ChipGroup options={VIBES} value={form.vibes} onChange={(v) => set("vibes", v)} />
+              <ChipGroup
+                options={VIBES}
+                value={form.vibes}
+                onChange={(v) => set("vibes", v)}
+              />
             </Question>
             <Question label="What pace do you like?">
               <SingleChipGroup
                 options={["light", "balanced", "packed"] as const}
                 value={form.pace}
                 onChange={(v) => set("pace", v)}
-                labels={{ light: "Light", balanced: "Balanced", packed: "Packed" }}
+                labels={{
+                  light: "Light",
+                  balanced: "Balanced",
+                  packed: "Packed",
+                }}
               />
             </Question>
             <Question label="What matters most? (pick any)">
@@ -540,7 +603,9 @@ export function InterviewForm() {
           <div className="space-y-5">
             <h2 className="text-xl font-bold">Money talk</h2>
             <div>
-              <Label htmlFor="budget">What is your total trip budget? (USD)</Label>
+              <Label htmlFor="budget">
+                What is your total trip budget? (USD)
+              </Label>
               <Input
                 id="budget"
                 type="number"
@@ -578,7 +643,9 @@ export function InterviewForm() {
             </Question>
             <Question label="What transport style do you prefer?">
               <SingleChipGroup
-                options={Object.keys(TRANSPORT_STYLE_LABELS) as TransportStyle[]}
+                options={
+                  Object.keys(TRANSPORT_STYLE_LABELS) as TransportStyle[]
+                }
                 value={form.transportStyle}
                 onChange={(v) => set("transportStyle", v)}
                 labels={TRANSPORT_STYLE_LABELS}
@@ -615,7 +682,9 @@ export function InterviewForm() {
               Festival Mode
             </h2>
             <div>
-              <Label htmlFor="festName">What festival or event are you attending?</Label>
+              <Label htmlFor="festName">
+                What festival or event are you attending?
+              </Label>
               <Input
                 id="festName"
                 placeholder="e.g. EDC Las Vegas"
@@ -624,18 +693,26 @@ export function InterviewForm() {
               />
             </div>
             <Question label="Do you have tickets already?">
-              <YesNo value={form.hasTickets} onChange={(v) => set("hasTickets", v)} />
+              <YesNo
+                value={form.hasTickets}
+                onChange={(v) => set("hasTickets", v)}
+              />
             </Question>
             <Question label="Where are you staying?">
               <SingleChipGroup
-                options={["Hotel", "Airbnb", "Camping", "With friends"] as const}
+                options={
+                  ["Hotel", "Airbnb", "Camping", "With friends"] as const
+                }
                 value={form.festivalLodging as "Hotel"}
                 onChange={(v) => set("festivalLodging", v)}
               />
             </Question>
             <div className="grid gap-4 sm:grid-cols-2">
               <Question label="Set planning?">
-                <YesNo value={form.wantsSetPlanning} onChange={(v) => set("wantsSetPlanning", v)} />
+                <YesNo
+                  value={form.wantsSetPlanning}
+                  onChange={(v) => set("wantsSetPlanning", v)}
+                />
               </Question>
               <Question label="Outfit planning?">
                 <YesNo
@@ -643,7 +720,7 @@ export function InterviewForm() {
                   onChange={(v) => set("wantsOutfitPlanning", v)}
                 />
               </Question>
-              <Question label="Hydration / recovery reminders?">
+              <Question label="Hydration / recovery checklist?">
                 <YesNo
                   value={form.wantsHydrationReminders}
                   onChange={(v) => set("wantsHydrationReminders", v)}
@@ -682,7 +759,10 @@ export function InterviewForm() {
           >
             <ArrowLeft className="size-4" /> Back
           </Button>
-          <Button onClick={next} variant={step === lastStep ? "primary" : "primary"}>
+          <Button
+            onClick={next}
+            variant={step === lastStep ? "primary" : "primary"}
+          >
             {step === lastStep ? (
               <>
                 <ChefHat className="size-4" /> Cook my trip

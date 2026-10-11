@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { tripsForYear } from "@/lib/calendar";
+import { Label, Select } from "@/components/ui/input";
 import { CalendarDays, Crown, Lock, Plus } from "lucide-react";
 import { calculateReadinessScore } from "@/lib/readiness";
 import {
@@ -33,15 +36,21 @@ function LockedPreview() {
         </span>
         <h2 className="text-3xl font-bold">Build your travel year.</h2>
         <p className="mx-auto mt-3 max-w-lg text-ocean-200">
-          TripCooker Premium lets you plan multiple trips, view your yearly travel
-          calendar, and track your annual travel budget.
+          TripCooker Premium lets you plan multiple trips, view your yearly
+          travel calendar, and track your annual travel budget.
         </p>
         <Link href="/premium" className="mt-6 inline-block">
-          <Button size="lg" className="bg-white text-ocean-900 hover:bg-sand-100">
+          <Button
+            size="lg"
+            className="bg-white text-ocean-900 hover:bg-sand-100"
+          >
             <Crown className="size-4" /> Unlock Travel Season Pro
           </Button>
         </Link>
       </Card>
+      <p className="mt-4 text-center text-xs text-charcoal-400">
+        Illustrative trips · not official event dates
+      </p>
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {MOCK_YEAR.map((m) => (
           <Card
@@ -51,7 +60,9 @@ function LockedPreview() {
             <p className="flex items-center justify-center gap-1 text-xs font-semibold uppercase tracking-wide text-charcoal-400">
               <CalendarDays className="size-3" /> {m.month}
             </p>
-            <p className="mt-2 text-sm font-medium text-charcoal-700">{m.trip}</p>
+            <p className="mt-2 text-sm font-medium text-charcoal-700">
+              {m.trip}
+            </p>
             <Lock className="mx-auto mt-2 size-3.5 text-charcoal-400" />
           </Card>
         ))}
@@ -64,7 +75,17 @@ export default function CalendarPage() {
   const db = useDB();
   const isPremium = db.user.plan === "premium";
 
-  const bundles = db.trips.map((trip) => ({
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const years = [
+    ...new Set([
+      year,
+      String(new Date().getFullYear()),
+      ...db.trips.flatMap((t) =>
+        t.startDate ? [t.startDate.slice(0, 4)] : [],
+      ),
+    ]),
+  ].sort();
+  const bundles = tripsForYear(db.trips, year).map((trip) => ({
     trip,
     budgetItems: tripBudget(db, trip.id),
     packingItems: tripPacking(db, trip.id),
@@ -74,7 +95,7 @@ export default function CalendarPage() {
 
   const annualCost = bundles.reduce(
     (sum, b) => sum + b.budgetItems.reduce((s, i) => s + i.estimatedAmount, 0),
-    0
+    0,
   );
   const upcoming = bundles
     .filter((b) => b.trip.startDate && b.trip.startDate >= todayISO())
@@ -82,7 +103,7 @@ export default function CalendarPage() {
 
   const byMonth = new Map<string, typeof bundles>();
   for (const b of [...bundles].sort((x, y) =>
-    (x.trip.startDate ?? "9999").localeCompare(y.trip.startDate ?? "9999")
+    (x.trip.startDate ?? "9999").localeCompare(y.trip.startDate ?? "9999"),
   )) {
     const key = b.trip.startDate
       ? parseISODate(b.trip.startDate).toLocaleDateString("en-US", {
@@ -100,7 +121,7 @@ export default function CalendarPage() {
           title="Travel Year Calendar"
           description={
             isPremium
-              ? "Every trip in your travel season, month by month."
+              ? "Trips by departure year. Archived and undated trips are excluded from yearly totals."
               : "A Premium view of your whole travel year."
           }
           actions={
@@ -118,9 +139,25 @@ export default function CalendarPage() {
           <LockedPreview />
         ) : (
           <div className="space-y-6">
+            <div className="max-w-xs">
+              <Label htmlFor="travel-year">Travel year</Label>
+              <Select
+                id="travel-year"
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+              >
+                {years.map((y) => (
+                  <option key={y}>{y}</option>
+                ))}
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard label="Trips this year" value={db.trips.length} />
-              <StatCard label="Annual travel cost" value={formatMoney(annualCost)} accent="blue" />
+              <StatCard label="Trips this year" value={bundles.length} />
+              <StatCard
+                label="Annual travel cost"
+                value={formatMoney(annualCost)}
+                accent="blue"
+              />
               <StatCard
                 label="Next trip"
                 value={upcoming ? upcoming.trip.destination : "—"}

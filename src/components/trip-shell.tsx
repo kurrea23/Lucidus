@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { MapPin, PartyPopper, Timer, Trash2 } from "lucide-react";
 import type { TripBundle } from "@/lib/readiness";
 import {
+  activeTrips,
   deleteTrip,
   getTrip,
   tripBudget,
@@ -15,12 +16,12 @@ import {
   useDB,
   type DB,
 } from "@/lib/store";
-import { TRIP_TYPE_LABELS } from "@/lib/types";
+import { type TripStatus, TRIP_TYPE_LABELS } from "@/lib/types";
 import { cn, countdownLabel, tripCountdown } from "@/lib/utils";
 import { AppShell, PageContainer } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Label, Select } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared";
 import { Map } from "lucide-react";
 
@@ -64,7 +65,7 @@ export function TripShell({
           <EmptyState
             icon={Map}
             title="Trip not found"
-            description="This trip may have been deleted, or your demo data was reset."
+            description="This trip may have been deleted, or it is not in this account."
             action={
               <Link href="/dashboard">
                 <Button>Back to dashboard</Button>
@@ -123,13 +124,39 @@ export function TripShell({
             </Button>
           </div>
 
+          <div className="mt-3 max-w-xs">
+            <Label htmlFor="trip-status">Trip status</Label>
+            <Select
+              id="trip-status"
+              value={trip.status}
+              onChange={(e) =>
+                updateTrip(trip.id, { status: e.target.value as TripStatus })
+              }
+            >
+              {["planning", "ready", "completed", "archived"].map((status) => (
+                <option
+                  key={status}
+                  value={status}
+                  disabled={
+                    db.user.plan === "free" &&
+                    ["planning", "ready"].includes(status) &&
+                    activeTrips(db).filter((t) => t.id !== trip.id).length >= 1
+                  }
+                >
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </option>
+              ))}
+            </Select>
+          </div>
           {/* Dates */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Input
               type="date"
               className="h-9 w-auto"
               value={trip.startDate ?? ""}
-              onChange={(e) => updateTrip(trip.id, { startDate: e.target.value || null })}
+              onChange={(e) =>
+                updateTrip(trip.id, { startDate: e.target.value || null })
+              }
               aria-label="Trip start date"
             />
             <span className="text-charcoal-400">→</span>
@@ -137,12 +164,18 @@ export function TripShell({
               type="date"
               className="h-9 w-auto"
               value={trip.endDate ?? ""}
-              onChange={(e) => updateTrip(trip.id, { endDate: e.target.value || null })}
+              onChange={(e) =>
+                updateTrip(trip.id, { endDate: e.target.value || null })
+              }
               aria-label="Trip end date"
             />
           </div>
         </div>
 
+        <p className="mb-4 text-xs text-charcoal-500">
+          Changing trip dates does not move itinerary items. Review the
+          itinerary after changing dates.
+        </p>
         {/* Tabs */}
         <nav className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-sand-200 bg-white p-1">
           {TABS.map((tab) => (
@@ -153,7 +186,7 @@ export function TripShell({
                 "rounded-lg px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
                 active === tab.slug
                   ? "bg-ocean-700 text-white"
-                  : "text-charcoal-500 hover:bg-sand-100 hover:text-charcoal-900"
+                  : "text-charcoal-500 hover:bg-sand-100 hover:text-charcoal-900",
               )}
             >
               {tab.label}

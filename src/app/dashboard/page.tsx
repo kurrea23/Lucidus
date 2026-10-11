@@ -21,6 +21,9 @@ import { TripCard } from "@/components/trip-card";
 export default function DashboardPage() {
   const db = useDB();
   const trips = activeTrips(db);
+  const history = db.trips.filter((t) =>
+    ["completed", "archived"].includes(t.status),
+  );
 
   return (
     <AppShell>
@@ -83,6 +86,31 @@ export default function DashboardPage() {
               {db.travelProfile && <TravelDNACard profile={db.travelProfile} />}
             </div>
           </div>
+        )}
+        {history.length > 0 && (
+          <section className="mt-8">
+            <h2 className="mb-3 text-lg font-semibold">
+              Completed trips & archive
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {history.map((trip) => (
+                <div key={trip.id}>
+                  <p className="mb-1 text-xs capitalize text-charcoal-400">
+                    {trip.status}
+                  </p>
+                  <TripCard
+                    bundle={{
+                      trip,
+                      budgetItems: tripBudget(db, trip.id),
+                      packingItems: tripPacking(db, trip.id),
+                      itineraryItems: tripItinerary(db, trip.id),
+                      travelTasks: tripTasks(db, trip.id),
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </PageContainer>
     </AppShell>

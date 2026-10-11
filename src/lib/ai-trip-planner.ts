@@ -10,15 +10,11 @@ import {
 } from "./types";
 import { addDays, daysBetween } from "./utils";
 
-/**
- * AI trip planner. If an AI API key is configured this is where a real model
- * call would go; for the MVP it produces a deterministic, personalized plan
- * from the interview answers using templates.
- */
+/** Builds an editable starter plan from travel templates. No external model, live pricing, or bookings. */
 export async function aiTripPlanner(
   input: TripInterviewInput
 ): Promise<GeneratedTripPlan> {
-  // No API key in MVP — always use the deterministic mock planner.
+  // Template planning is the supported launch behavior.
   return mockTripPlanner(input);
 }
 

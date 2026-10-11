@@ -13,25 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DemoButton } from "@/components/demo-button";
+import { FREE_FEATURES, PRO_FEATURES } from "@/lib/app-config";
 import { Logo } from "@/components/app-shell";
-
-const FREE_FEATURES = [
-  "1 active trip",
-  "Travel interview & Travel DNA",
-  "Trip dashboard with readiness score",
-  "Itinerary, budget & countdown",
-  "Packing list & task checklist",
-  "Festival Mode for your trip",
-];
-
-const PREMIUM_FEATURES = [
-  "Unlimited trips",
-  "Yearly travel calendar",
-  "Annual travel budget",
-  "Multi-trip dashboard & archive",
-  "Group planning & split costs",
-  "Advanced Festival Mode + AI concierge",
-];
 
 const MOCK_YEAR = [
   { month: "May", trip: "EDC Las Vegas", color: "bg-neon-100 text-neon-700" },
@@ -62,7 +45,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="mx-auto w-full max-w-6xl px-4 pt-16 pb-12 text-center md:px-8 md:pt-24">
         <Badge variant="blue" className="mb-4">
-          <Sparkles className="size-3" /> AI-powered travel planning
+          <Sparkles className="size-3" /> Travel planning, made personal
         </Badge>
         <h1 className="mx-auto max-w-3xl text-4xl font-extrabold tracking-tight text-charcoal-900 md:text-6xl">
           Cook one trip free.{" "}
@@ -123,7 +106,7 @@ export default function LandingPage() {
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <Card className="p-6">
             <h3 className="text-lg font-bold">Free</h3>
-            <p className="text-sm text-charcoal-500">Your first trip, fully cooked.</p>
+            <p className="text-sm text-charcoal-500">One active trip, organized.</p>
             <ul className="mt-4 space-y-2">
               {FREE_FEATURES.map((f) => (
                 <li key={f} className="flex items-center gap-2 text-sm text-charcoal-700">
@@ -136,9 +119,9 @@ export default function LandingPage() {
             <h3 className="flex items-center gap-2 text-lg font-bold">
               <Crown className="size-5 text-amber-300" /> Travel Season Pro
             </h3>
-            <p className="text-sm text-ocean-200">Your whole travel year, organized.</p>
+            <p className="text-sm text-ocean-200">Your whole travel year, organized. $7.99/month or $59/year.</p>
             <ul className="mt-4 space-y-2">
-              {PREMIUM_FEATURES.map((f) => (
+              {PRO_FEATURES.map((f) => (
                 <li key={f} className="flex items-center gap-2 text-sm">
                   <Check className="size-4 text-amber-300" /> {f}
                 </li>
@@ -160,7 +143,7 @@ export default function LandingPage() {
                 Built different for festivals.
               </h2>
               <p className="mt-3 text-sm text-white/70">
-                Wristbands, hydration packs, set schedules, meetup spots, afterparties,
+                Wristbands, hydration packs, your set schedule, meetup spots, afterparties,
                 recovery days — Festival Mode swaps in everything an event trip actually
                 needs.
               </p>
@@ -192,6 +175,7 @@ export default function LandingPage() {
         <p className="mt-2 text-center text-charcoal-500">
           Premium turns scattered trips into a planned travel season.
         </p>
+        <p className="mt-4 text-center text-xs text-charcoal-400">Illustrative trips · not official event dates</p>
         <div className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-4">
           {MOCK_YEAR.map((m) => (
             <Card key={m.month} className="p-4 text-center">
@@ -227,6 +211,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-sand-200 py-8 text-center text-sm text-charcoal-400">
         TripCooker — turn scattered travel ideas into a cooked plan.
+        <p className="mx-auto mt-2 max-w-lg px-4">Editable planning templates and estimated budgets. Confirm all bookings, prices, and event information independently.</p>
       </footer>
     </div>
   );

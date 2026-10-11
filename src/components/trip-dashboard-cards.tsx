@@ -28,6 +28,7 @@ export function ReadinessScoreCard({ bundle }: { bundle: TripBundle }) {
           <span className="font-semibold text-charcoal-700">{score}% cooked</span> —{" "}
           {readinessCopy(score)}
         </p>
+        <p className="mt-2 text-xs text-charcoal-400">A planning score, not booking verification. Packing points reflect list preparation; check your packed items separately.</p>
       </CardContent>
     </Card>
   );
@@ -41,7 +42,7 @@ export function NextActionCard({ bundle }: { bundle: TripBundle }) {
         <CardContent className="pt-5">
           <p className="font-semibold text-emerald-800">Your trip is cooked. 🎉</p>
           <p className="mt-1 text-sm text-emerald-700">
-            Everything on the readiness checklist is handled. Enjoy the trip.
+            The planning checks are covered. Confirm bookings and finish packing before you go.
           </p>
         </CardContent>
       </Card>

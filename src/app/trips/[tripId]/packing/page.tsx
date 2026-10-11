@@ -109,12 +109,14 @@ export default function PackingPage({
               >
                 <Input
                   className="min-w-40 flex-1"
+                  aria-label="Packing item"
                   placeholder="Add an item…"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                 />
                 <Select
                   className="w-40"
+                  aria-label="Packing category"
                   value={category}
                   onChange={(e) => setCategory(e.target.value as PackingCategory)}
                 >

@@ -52,7 +52,7 @@ export default function TripDashboardPage({
                   className="min-h-28"
                 />
                 <p className="mt-1.5 text-xs text-charcoal-400">
-                  Tip: mention an emergency contact here for +10 readiness.
+                  Keep emergency contact details and important addresses here.
                 </p>
               </CardContent>
             </Card>

@@ -6,13 +6,17 @@ import type {
   GeneratedTripPlan,
   ItineraryItem,
   PackingItem,
-  TravelProfile,
   TravelTask,
   Trip,
   TripInterviewInput,
   UserProfile,
 } from "./types";
 import { addDays, todayISO, uid } from "./utils";
+import { LIVE_MODE } from "./app-config";
+import { emptyDatabase, type DB } from "./database";
+import { databaseSchema, interviewProblem } from "./validation";
+import { SyncQueue } from "./sync-queue";
+export type { DB } from "./database";
 
 /**
  * TripCooker local demo mode store.
@@ -21,17 +25,6 @@ import { addDays, todayISO, uid } from "./utils";
  * Supabase schema in supabase/schema.sql so the storage layer can be swapped
  * for real auth + Postgres without touching the UI.
  */
-
-export type DB = {
-  user: UserProfile;
-  travelProfile: TravelProfile | null;
-  trips: Trip[];
-  itineraryItems: ItineraryItem[];
-  budgetItems: BudgetItem[];
-  packingItems: PackingItem[];
-  travelTasks: TravelTask[];
-  festivalDetails: FestivalDetails[];
-};
 
 const STORAGE_KEY = "tripcooker:v1";
 
@@ -77,12 +70,125 @@ const SERVER_DB: DB = {
 
 let cache: DB | null = null;
 const listeners = new Set<() => void>();
+let remote: SyncQueue | null = null;
+let remoteID: string | null = null;
+let notice = "";
+let status = { state: "ready", message: "" };
+function announce() {
+  if (LIVE_MODE && remoteID) {
+    try {
+      if (remote?.pending)
+        sessionStorage.setItem(
+          `tripcooker:pending:${remoteID}`,
+          JSON.stringify(remote.pending),
+        );
+      else sessionStorage.removeItem(`tripcooker:pending:${remoteID}`);
+    } catch {
+      /* Unsaved-change warning and export remain available. */
+    }
+  }
+  status = {
+    state: remote?.status ?? "ready",
+    message: notice || remote?.message || "",
+  };
+  listeners.forEach((l) => l());
+}
+export function useSaveStatus() {
+  return useSyncExternalStore(
+    subscribe,
+    () => status,
+    () => status,
+  );
+}
+export function hasUnsavedChanges() {
+  return Boolean(remote?.pending);
+}
+export function retrySave() {
+  return remote?.flush();
+}
+export function currentData() {
+  return readDB();
+}
+export function clearRemote() {
+  remote = null;
+  remoteID = null;
+  cache = emptyDatabase();
+  notice = "";
+  announce();
+}
+export function connectRemote(
+  data: DB,
+  version: number,
+  save: ConstructorParameters<typeof SyncQueue>[1],
+) {
+  cache = data;
+  remoteID = data.user.id;
+  notice = "";
+  const ownID = remoteID;
+  remote = new SyncQueue(
+    version,
+    save,
+    () => {
+      if (remoteID !== ownID) return;
+      announce();
+    },
+    (user) => {
+      if (cache && remoteID === ownID)
+        cache = {
+          ...cache,
+          user: {
+            ...cache.user,
+            id: user.id,
+            email: user.email,
+            plan: user.plan,
+            createdAt: user.createdAt,
+          },
+        };
+    },
+  );
+  try {
+    const pending = sessionStorage.getItem(`tripcooker:pending:${ownID}`);
+    if (pending) {
+      const recovered = databaseSchema.safeParse(JSON.parse(pending));
+      if (recovered.success) {
+        const recoveredDB = recovered.data as DB;
+        cache = {
+          ...recoveredDB,
+          user: {
+            ...recoveredDB.user,
+            id: data.user.id,
+            email: data.user.email,
+            plan: data.user.plan,
+            createdAt: data.user.createdAt,
+          },
+        };
+        remote.pending = cache;
+        remote.status = "conflict";
+        remote.message =
+          "Unsaved changes were recovered in this browser. Export them before loading the saved account version.";
+      }
+    }
+  } catch {
+    notice = "Could not recover pending changes.";
+  }
+  announce();
+}
+export function discardPending() {
+  if (remoteID) sessionStorage.removeItem(`tripcooker:pending:${remoteID}`);
+}
 
 function readDB(): DB {
   if (cache) return cache;
+  if (LIVE_MODE) return (cache = emptyDatabase());
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    cache = raw ? { ...emptyDB(), ...(JSON.parse(raw) as DB) } : emptyDB();
+    const parsed = raw
+      ? databaseSchema.safeParse({ ...emptyDB(), ...JSON.parse(raw) })
+      : null;
+    cache = parsed?.success ? (parsed.data as DB) : emptyDB();
+    if (raw && !parsed?.success)
+      notice =
+        "Saved browser data could not be read. The original stored copy has been kept.";
   } catch {
     cache = emptyDB();
   }
@@ -90,13 +196,32 @@ function readDB(): DB {
 }
 
 function writeDB(db: DB) {
+  const valid = databaseSchema.safeParse(db);
+  if (!valid.success) {
+    notice =
+      "Check dates, non-negative amounts, and required fields. This change was not saved.";
+    announce();
+    return;
+  }
+  if (LIVE_MODE && !remote) {
+    notice = "Sign in and load your account before making changes.";
+    announce();
+    return;
+  }
   cache = db;
+  notice = "";
+  if (LIVE_MODE) {
+    remote!.enqueue(db);
+    announce();
+    return;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
   } catch {
-    // localStorage unavailable (private mode etc.) — keep in-memory state.
+    notice =
+      "Browser storage is unavailable. Export your data before closing this page.";
   }
-  listeners.forEach((l) => l());
+  announce();
 }
 
 function mutate(fn: (db: DB) => DB) {
@@ -105,7 +230,7 @@ function mutate(fn: (db: DB) => DB) {
 
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
-    if (e.key === STORAGE_KEY) {
+    if (!LIVE_MODE && e.key === STORAGE_KEY) {
       cache = null;
       listeners.forEach((l) => l());
     }
@@ -124,7 +249,9 @@ export function useDB(): DB {
 /* ------------------------------ Selectors ------------------------------ */
 
 export function activeTrips(db: DB): Trip[] {
-  return db.trips.filter((t) => t.status === "planning" || t.status === "ready");
+  return db.trips.filter(
+    (t) => t.status === "planning" || t.status === "ready",
+  );
 }
 
 export function canCreateTrip(db: DB): boolean {
@@ -140,8 +267,8 @@ export function tripItinerary(db: DB, tripId: string): ItineraryItem[] {
     .filter((i) => i.tripId === tripId)
     .sort((a, b) =>
       `${a.itemDate ?? "9999"}T${a.startTime ?? "99:99"}`.localeCompare(
-        `${b.itemDate ?? "9999"}T${b.startTime ?? "99:99"}`
-      )
+        `${b.itemDate ?? "9999"}T${b.startTime ?? "99:99"}`,
+      ),
     );
 }
 
@@ -157,13 +284,18 @@ export function tripTasks(db: DB, tripId: string): TravelTask[] {
   return db.travelTasks.filter((i) => i.tripId === tripId);
 }
 
-export function tripFestival(db: DB, tripId: string): FestivalDetails | undefined {
+export function tripFestival(
+  db: DB,
+  tripId: string,
+): FestivalDetails | undefined {
   return db.festivalDetails.find((f) => f.tripId === tripId);
 }
 
 /* ------------------------------ Mutations ------------------------------ */
 
 export function updateUser(patch: Partial<UserProfile>) {
+  if (LIVE_MODE)
+    patch = { displayName: patch.displayName ?? readDB().user.displayName };
   mutate((db) => ({ ...db, user: { ...db.user, ...patch } }));
 }
 
@@ -187,8 +319,12 @@ export function saveTravelProfile(dna: GeneratedTripPlan["travelDNA"]) {
 
 export function createTripFromPlan(
   input: TripInterviewInput,
-  plan: GeneratedTripPlan
+  plan: GeneratedTripPlan,
 ): string {
+  const problem = interviewProblem(input);
+  if (problem) throw new Error(problem);
+  if (!canCreateTrip(readDB()))
+    throw new Error("Your free plan allows one active trip.");
   const tripId = uid();
   const now = new Date().toISOString();
 
@@ -266,8 +402,8 @@ export function createTripFromPlan(
           tripId,
           festivalName: plan.festivalDetails.festivalName,
           ticketStatus:
-            (plan.festivalDetails.ticketStatus as FestivalDetails["ticketStatus"]) ??
-            "not_added",
+            (plan.festivalDetails
+              .ticketStatus as FestivalDetails["ticketStatus"]) ?? "not_added",
           lodgingType: plan.festivalDetails.lodgingType,
           venueTransportation: plan.festivalDetails.venueTransportation,
           meetupSpot: plan.festivalDetails.meetupSpot,
@@ -311,7 +447,9 @@ export function deleteTrip(tripId: string) {
 
 /* Itinerary */
 
-export function addItineraryItem(item: Omit<ItineraryItem, "id" | "createdAt">) {
+export function addItineraryItem(
+  item: Omit<ItineraryItem, "id" | "createdAt">,
+) {
   mutate((db) => ({
     ...db,
     itineraryItems: [
@@ -324,7 +462,9 @@ export function addItineraryItem(item: Omit<ItineraryItem, "id" | "createdAt">) 
 export function updateItineraryItem(id: string, patch: Partial<ItineraryItem>) {
   mutate((db) => ({
     ...db,
-    itineraryItems: db.itineraryItems.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+    itineraryItems: db.itineraryItems.map((i) =>
+      i.id === id ? { ...i, ...patch } : i,
+    ),
   }));
 }
 
@@ -350,7 +490,9 @@ export function addBudgetItem(item: Omit<BudgetItem, "id" | "createdAt">) {
 export function updateBudgetItem(id: string, patch: Partial<BudgetItem>) {
   mutate((db) => ({
     ...db,
-    budgetItems: db.budgetItems.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+    budgetItems: db.budgetItems.map((i) =>
+      i.id === id ? { ...i, ...patch } : i,
+    ),
   }));
 }
 
@@ -377,7 +519,7 @@ export function togglePackingItem(id: string) {
   mutate((db) => ({
     ...db,
     packingItems: db.packingItems.map((i) =>
-      i.id === id ? { ...i, isPacked: !i.isPacked } : i
+      i.id === id ? { ...i, isPacked: !i.isPacked } : i,
     ),
   }));
 }
@@ -404,7 +546,9 @@ export function addTravelTask(item: Omit<TravelTask, "id" | "createdAt">) {
 export function toggleTravelTask(id: string) {
   mutate((db) => ({
     ...db,
-    travelTasks: db.travelTasks.map((t) => (t.id === id ? { ...t, isDone: !t.isDone } : t)),
+    travelTasks: db.travelTasks.map((t) =>
+      t.id === id ? { ...t, isDone: !t.isDone } : t,
+    ),
   }));
 }
 
@@ -417,14 +561,17 @@ export function deleteTravelTask(id: string) {
 
 /* Festival details */
 
-export function upsertFestivalDetails(tripId: string, patch: Partial<FestivalDetails>) {
+export function upsertFestivalDetails(
+  tripId: string,
+  patch: Partial<FestivalDetails>,
+) {
   mutate((db) => {
     const existing = db.festivalDetails.find((f) => f.tripId === tripId);
     if (existing) {
       return {
         ...db,
         festivalDetails: db.festivalDetails.map((f) =>
-          f.tripId === tripId ? { ...f, ...patch } : f
+          f.tripId === tripId ? { ...f, ...patch } : f,
         ),
       };
     }
@@ -450,7 +597,7 @@ export function upsertFestivalDetails(tripId: string, patch: Partial<FestivalDet
 }
 
 export function resetAll() {
-  writeDB(emptyDB());
+  writeDB(LIVE_MODE ? { ...emptyDB(), user: readDB().user } : emptyDB());
 }
 
 /* ------------------------------ Demo data ------------------------------ */
@@ -495,15 +642,20 @@ export function seedDemoTrip(): string {
   // Make the demo feel mid-planning: some progress, not everything done.
   updateTrip(tripId, {
     amountSaved: 750,
-    notes: "Emergency contact: Sam (sister) — 555-0142. Meet at the Ferris wheel if separated.",
+    notes:
+      "Emergency contact: Sam (sister) — 555-0142. Meet at the Ferris wheel if separated.",
   });
   const db = readDB();
   const tasks = tripTasks(db, tripId);
   for (const t of tasks) {
-    if (/Register festival wristband|Book lodging/.test(t.title)) toggleTravelTask(t.id);
+    if (/Register festival wristband|Book lodging/.test(t.title))
+      toggleTravelTask(t.id);
   }
-  const lodging = tripBudget(readDB(), tripId).find((b) => b.category === "lodging");
-  if (lodging) updateBudgetItem(lodging.id, { paidAmount: lodging.estimatedAmount });
+  const lodging = tripBudget(readDB(), tripId).find(
+    (b) => b.category === "lodging",
+  );
+  if (lodging)
+    updateBudgetItem(lodging.id, { paidAmount: lodging.estimatedAmount });
   const packing = tripPacking(readDB(), tripId);
   for (const p of packing.slice(0, 3)) togglePackingItem(p.id);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { itineraryWarnings } from "@/lib/itinerary-timing";
 import { use, useState } from "react";
 import { AlertTriangle, CalendarClock, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
@@ -16,7 +17,6 @@ import {
   formatMoney,
   formatShortDate,
   formatTime,
-  timeToMinutes,
 } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -227,6 +227,7 @@ export default function ItineraryPage({
     <TripShell tripId={tripId} active="/itinerary">
       {(bundle) => {
         const items = bundle.itineraryItems;
+        const warnings = itineraryWarnings(items);
         const byDay = new Map<string, ItineraryItem[]>();
         for (const item of items) {
           const key = item.itemDate ?? "unscheduled";
@@ -283,18 +284,8 @@ export default function ItineraryPage({
                     {day === "unscheduled" ? "Unscheduled" : formatShortDate(day)}
                   </h3>
                   <div className="space-y-2">
-                    {dayItems.map((item, idx) => {
-                      // Flag tight timing: < 30 min between this and the previous item.
-                      const prev = idx > 0 ? dayItems[idx - 1] : null;
-                      const prevEnd = prev
-                        ? timeToMinutes(prev.endTime) ?? timeToMinutes(prev.startTime)
-                        : null;
-                      const thisStart = timeToMinutes(item.startTime);
-                      const tight =
-                        prevEnd !== null &&
-                        thisStart !== null &&
-                        thisStart - prevEnd >= 0 &&
-                        thisStart - prevEnd < 30;
+                    {dayItems.map((item) => {
+                      const timing = warnings.get(item.id);
 
                       if (editingId === item.id) {
                         return (
@@ -345,10 +336,10 @@ export default function ItineraryPage({
                               {item.notes && (
                                 <p className="mt-1 text-sm text-charcoal-400">{item.notes}</p>
                               )}
-                              {tight && (
+                              {timing && (
                                 <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
                                   <AlertTriangle className="size-3.5" />
-                                  Tight timing — less than 30 minutes after the previous item.
+                                  {timing === "overlap" ? "Schedule overlap — this item starts before an earlier item ends." : "Tight timing — less than 30 minutes between items."}
                                 </p>
                               )}
                             </div>

@@ -1,20 +1,21 @@
 "use client";
-
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Crown, RotateCcw, UserRound } from "lucide-react";
+import { useState } from "react";
 import { resetAll, updateUser, useDB } from "@/lib/store";
+import { LIVE_MODE } from "@/lib/app-config";
+import { useAccount } from "@/components/account-provider";
+import { exportTripData } from "@/components/save-status";
 import { AppShell, PageContainer, PageHeader } from "@/components/app-shell";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { TravelDNACard } from "@/components/travel-dna-card";
-
 export default function SettingsPage() {
   const db = useDB();
   const router = useRouter();
-  const isPremium = db.user.plan === "premium";
-
+  const account = useAccount();
+  const [message, setMessage] = useState("");
   return (
     <AppShell>
       <PageContainer className="max-w-3xl">
@@ -22,83 +23,122 @@ export default function SettingsPage() {
           title="Settings"
           description="Your profile, plan, and travel preferences."
         />
-
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UserRound className="size-4 text-ocean-600" /> Profile
-              </CardTitle>
+              <CardTitle>Profile</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="name">Display name</Label>
                 <Input
+                  key={db.user.id + db.user.displayName}
                   id="name"
                   defaultValue={db.user.displayName}
-                  onBlur={(e) => updateUser({ displayName: e.target.value || "Traveler" })}
+                  onBlur={(e) =>
+                    updateUser({ displayName: e.target.value || "Traveler" })
+                  }
                 />
               </div>
               <div>
-                <Label htmlFor="email">Email (demo mode)</Label>
+                <Label htmlFor="email">
+                  {LIVE_MODE ? "Account email" : "Email (demo mode)"}
+                </Label>
                 <Input
+                  key={db.user.id}
                   id="email"
                   type="email"
-                  placeholder="you@example.com"
+                  readOnly={LIVE_MODE}
                   defaultValue={db.user.email}
-                  onBlur={(e) => updateUser({ email: e.target.value })}
+                  onBlur={(e) => {
+                    if (!LIVE_MODE) updateUser({ email: e.target.value });
+                  }}
                 />
               </div>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Crown className="size-4 text-ocean-600" /> Plan
+            <CardHeader>
+              <CardTitle>
+                {db.user.plan === "premium" ? "Travel Season Pro" : "Free plan"}
               </CardTitle>
-              <Badge variant={isPremium ? "blue" : "default"}>
-                {isPremium ? "Travel Season Pro" : "Free"}
-              </Badge>
             </CardHeader>
-            <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <CardContent className="space-y-3">
               <p className="text-sm text-charcoal-500">
-                {isPremium
-                  ? "Unlimited trips, Travel Year Calendar, and annual budget tracking."
-                  : "One active trip. Upgrade to build your whole travel year."}
+                {db.user.plan === "premium"
+                  ? "Multiple trips, Travel Year Calendar, and yearly budget totals."
+                  : "One active trip. Complete or archive it when you're ready to start the next."}
               </p>
-              {isPremium ? (
-                <Button variant="outline" onClick={() => updateUser({ plan: "free" })}>
-                  Switch to Free (demo)
+              <Link href="/premium">
+                <Button>
+                  {db.user.plan === "premium"
+                    ? "Manage plan & billing"
+                    : "Explore Travel Season Pro"}
                 </Button>
-              ) : (
-                <Button onClick={() => router.push("/premium")}>
-                  <Crown className="size-4" /> Unlock Travel Season Pro
+              </Link>
+              {!LIVE_MODE && db.user.plan === "premium" && (
+                <Button
+                  variant="outline"
+                  onClick={() => updateUser({ plan: "free" })}
+                >
+                  Switch to Free (demo)
                 </Button>
               )}
             </CardContent>
           </Card>
-
           {db.travelProfile && <TravelDNACard profile={db.travelProfile} />}
-
+          <Card>
+            <CardHeader>
+              <CardTitle>Your data</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-charcoal-500">
+                Download a JSON backup of your trips and profile. Keep it
+                private; it may include travel and emergency details.
+              </p>
+              <Button variant="outline" onClick={exportTripData}>
+                Export my data
+              </Button>
+              {LIVE_MODE && (
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    void account
+                      .signOut()
+                      .then(() => router.push("/"))
+                      .catch((e) => setMessage(e.message))
+                  }
+                >
+                  Sign out
+                </Button>
+              )}
+              {message && <p role="status">{message}</p>}
+            </CardContent>
+          </Card>
           <Card className="border-red-200">
             <CardHeader>
-              <CardTitle className="text-red-700">Danger zone</CardTitle>
+              <CardTitle className="text-red-700">Delete trip data</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-charcoal-500">
-                Reset all local demo data — trips, profile, and plan.
+            <CardContent>
+              <p className="mb-3 text-sm text-charcoal-500">
+                {LIVE_MODE
+                  ? "Delete all your trips and Travel DNA. Your account and subscription remain active. Use Manage billing to cancel a subscription."
+                  : "Reset all browser demo trips, profile, and plan."}
               </p>
               <Button
                 variant="danger"
                 onClick={() => {
-                  if (confirm("Reset all TripCooker data? This cannot be undone.")) {
+                  if (
+                    confirm(
+                      "Delete all trip data? Export a backup first. This cannot be undone.",
+                    )
+                  ) {
                     resetAll();
-                    router.push("/");
+                    router.push("/dashboard");
                   }
                 }}
               >
-                <RotateCcw className="size-4" /> Reset demo data
+                {LIVE_MODE ? "Delete all trip data" : "Reset demo data"}
               </Button>
             </CardContent>
           </Card>

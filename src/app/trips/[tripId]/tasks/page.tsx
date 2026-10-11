@@ -114,6 +114,7 @@ export default function TasksPage({
               >
                 <Input
                   className="min-w-44 flex-1"
+                  aria-label="Task title"
                   placeholder="Add a task…"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
