@@ -30,6 +30,21 @@ export function stripeClient() {
     httpClient: Stripe.createFetchHttpClient(),
   });
 }
+export async function checkoutAvailable(): Promise<boolean> {
+  if (process.env.PAYMENTS_ENABLED !== "true") return false;
+  const key = process.env.STRIPE_SECRET_KEY ?? "";
+  // Sandboxes can exercise checkout without enabling real merchant payouts.
+  if (/^[sr]k_test_/.test(key)) return true;
+  if (!/^[sr]k_live_/.test(key)) return false;
+  try {
+    // Check our own merchant account, never an ID supplied by the customer.
+    const account = await stripeClient().accounts.retrieve(null);
+    return account.charges_enabled === true && account.payouts_enabled === true;
+  } catch {
+    // Missing account-read permission or a provider outage must close checkout.
+    return false;
+  }
+}
 export function appURL() {
   const value = process.env.APP_URL;
   if (!value) throw new ApiError(503, "Billing is not available yet.");

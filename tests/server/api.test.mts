@@ -4,7 +4,7 @@ import { emptyDatabase } from "../../src/lib/database";
 process.env.NEXT_PUBLIC_APP_MODE = "live";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://qa.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "qa-not-a-real-key";
-process.env.STRIPE_SECRET_KEY = "qa-not-a-real-key";
+process.env.STRIPE_SECRET_KEY = "sk_test_not_a_real_key";
 process.env.STRIPE_MONTHLY_PRICE_ID = "price_monthly";
 process.env.STRIPE_YEARLY_PRICE_ID = "price_yearly";
 process.env.APP_URL = "https://tripcooker.example";
@@ -12,6 +12,7 @@ const { GET, PUT } = await import("../../src/app/api/state/route");
 const { POST: checkout } =
   await import("../../src/app/api/billing/checkout/route");
 const { POST: portal } = await import("../../src/app/api/billing/portal/route");
+const { GET: billingStatus } = await import("../../src/app/api/billing/status/route");
 const ownID = "11111111-1111-4111-8111-111111111111";
 const db = emptyDatabase(ownID, "qa@example.com");
 let calls: { url: string; body: string; idempotencyKey: string | null }[] = [],
@@ -20,6 +21,7 @@ let calls: { url: string; body: string; idempotencyKey: string | null }[] = [],
   wrongPrice = false,
   open = false;
 let openInterval = "monthly";
+let payoutsEnabled = false, chargesEnabled = true, accountError = false;
 const realFetch = globalThis.fetch;
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -34,6 +36,9 @@ function installMock() {
   wrongPrice = false;
   open = false;
   openInterval = "monthly";
+  payoutsEnabled = false;
+  chargesEnabled = true;
+  accountError = false;
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     const body = String(init?.body ?? "");
@@ -42,6 +47,10 @@ function installMock() {
       body,
       idempotencyKey: new Headers(init?.headers).get("idempotency-key"),
     });
+    if (url.endsWith("/v1/account"))
+      return accountError
+        ? response({ error: { message: "private provider details", type: "invalid_request_error" } }, 403)
+        : response({ id: "acct_qa", charges_enabled: chargesEnabled, payouts_enabled: payoutsEnabled });
     if (url.includes("/auth/v1/user")) {
       const token = new Headers(init?.headers).get("Authorization");
       return token === "Bearer valid"
@@ -190,6 +199,36 @@ test("server API verifies identity, overwrites forged plan, and safely handles i
     assert.equal(failure.status, 503);
     assert.ok(!(await failure.text()).includes("credentials"));
   } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+test("live checkout requires enabled charges and payouts, fails closed, and preserves billing management", async () => {
+  installMock();
+  process.env.PAYMENTS_ENABLED = "true";
+  process.env.STRIPE_SECRET_KEY = "sk_live_not_a_real_key";
+  try {
+    const paused = await checkout(req("POST", { interval: "monthly" }));
+    assert.equal(paused.status, 503);
+    assert.ok(!(await paused.text()).includes("private"));
+    assert.ok(!calls.some((c) => c.url.includes("/checkout/sessions")));
+    assert.ok(!calls.some((c) => c.url.includes("/v1/customers")));
+    assert.deepEqual(await (await billingStatus(req())).json(), { canManage: true, checkoutAvailable: false });
+    assert.equal((await portal(req("POST"))).status, 200);
+    payoutsEnabled = true;
+    chargesEnabled = false;
+    assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
+    chargesEnabled = true;
+    accountError = true;
+    assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
+    assert.equal((await (await billingStatus(req())).json()).checkoutAvailable, false);
+    accountError = false;
+    assert.equal((await (await billingStatus(req())).json()).checkoutAvailable, true);
+    assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 200);
+    // Invalid credentials must not be treated as sandbox access.
+    process.env.STRIPE_SECRET_KEY = "not_a_stripe_key";
+    assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
+  } finally {
+    process.env.STRIPE_SECRET_KEY = "sk_test_not_a_real_key";
     globalThis.fetch = realFetch;
   }
 });

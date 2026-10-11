@@ -2,6 +2,7 @@ import {
   api,
   ApiError,
   appURL,
+  checkoutAvailable,
   customerID,
   json,
   readJSON,
@@ -24,6 +25,8 @@ export function POST(request: Request) {
       .safeParse(await readJSON(request));
     if (!body.success)
       throw new ApiError(400, "Choose monthly or yearly billing.");
+    if (!(await checkoutAvailable()))
+      throw new ApiError(503, "Subscriptions are not open yet.");
     const stripe = stripeClient();
     const origin = appURL();
     const price = await verifiedPrice(body.data.interval);
