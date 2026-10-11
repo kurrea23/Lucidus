@@ -2,6 +2,8 @@
 
 Work is isolated on `codex/tripcooker-launch`. The restored main checkout and the saved Library experiment are unchanged. This is a prepared implementation, not a production release record.
 
+The owner now prioritizes a revenue-funded MVP with low fixed costs. Follow [the Railway bootstrap plan](bootstrap-launch.md) as the primary hosting path. Vercel remains an alternative. Paid upgrades are recommendations for later needs, not prerequisites that have been purchased.
+
 ## Supported launch offer
 
 - Free: one active trip, travel interview and Travel DNA, trip dashboard, estimated budget, editable itinerary, packing/tasks, and Festival Mode.
@@ -11,7 +13,7 @@ Work is isolated on `codex/tripcooker-launch`. The restored main checkout and th
 
 ## Configuration and deployment
 
-1. Select the owner's Supabase, Stripe and Vercel accounts and production domain. The connectors are now connected; see the verified provider setup below. Connection alone does not configure the app or prove deployment permissions.
+1. Select the owner's Supabase, Stripe and Railway accounts and production domain (Vercel is an alternative host). The connectors are now connected; see the verified provider setup below. Connection alone does not configure the app or prove deployment permissions.
 2. Use a **new Supabase project**. Apply `supabase/launch.sql`, not legacy `schema.sql`. The launch tables have RLS enabled and no anon/authenticated browser access. Only the server service role can read/write them. Keep that key secret.
 3. Enable Supabase email authentication and real SMTP delivery. Configure the sign-in email template to show `{{ .Token }}`; the UI verifies the emailed code with `verifyOtp` (`type: email`). Configure the production site origin, provider rate limits and email abuse protections. Verify a real email arrives. Sign-in is passwordless; no password reset is needed.
 4. Copy `.env.example` to an ignored `.env.local` for local integration testing. Set equivalent variables in hosting. Public Supabase URL/anon key and app mode are build-time settings; changes require rebuilding. The service role and Stripe secret are server-only.
@@ -20,7 +22,7 @@ Work is isolated on `codex/tripcooker-launch`. The restored main checkout and th
 7. `APP_URL` must be the canonical HTTPS origin, with no request-supplied return URL. Put secret values into provider dashboards; never paste them into chat. Set `PAYMENTS_ENABLED=false` during setup. Auth and free-trip testing still work.
 8. Owner must supply business identity, support email, cancellation/refund terms and privacy/data-retention policy. Publish reviewed policies and support links before taking money. This branch does not invent an operator or a refund policy. Define support handling for account deletion, cancellation/refunds and backup recovery.
 9. Configure Supabase database backups and confirm a restore, Vercel error monitoring, and provider usage/abuse limits. Trip data and emergency details are private. The export is JSON; there is no import/restore UI yet. Demo data is never silently imported into an account.
-10. Deploy a Vercel preview with live app mode, using Stripe test mode. Enable payments in the preview only with Stripe test-mode credentials, then run the acceptance list below. After approval of the real configuration and policies, enable payments and use `npm run check:launch` for presence checks. Production builds also run this check. A successful config check does not prove live service operation.
+10. Deploy Railway staging (or a Vercel preview) with live app mode, using Stripe test mode. Enable payments in staging only with Stripe test-mode credentials, then run the acceptance list below. After approval of the real configuration and policies, enable payments and use `npm run check:launch` for presence checks. Production builds also run this check. A successful config check does not prove live service operation.
 11. Deploy the exact tested commit to production. Verify the real domain, email, purchase, access and cancellation. Keep promotion drafts unpublished until the destination and launch URL are verified.
 
 ## Persistence and billing design
@@ -53,7 +55,7 @@ Required real-service checks before release:
 
 ## Current verification result
 
-- 12 automated tests pass (10 core/database/store tests and 2 API/billing tests).
+- 14 automated tests pass (10 core/database/store, 2 production-build guard, and 2 API/billing tests).
 - ESLint and Next.js production build pass.
 - `npm audit --omit=dev` reports zero vulnerabilities. Full audit retains five development-only ESLint dependency advisories.
 - Local live-mode API rejects unauthenticated state access with 401 and disabled checkout with 503.
@@ -71,6 +73,8 @@ Next.js upgraded from 16.2.9 to 16.4.0 after audit reported a critical advisory.
 - Stripe: the only connector-authorized account is named `Instagram`, in live mode. Its name does not establish the legal operator, payout readiness or suitability for TripCooker. Two searches did not expose the current-account retrieval operation; connected-account/Treasury results are not substitutes. No live billing settings or charges were changed. Use an isolated sandbox for hosted payment acceptance tests; select the real merchant after confirming business details and customer-facing branding. [Sandboxes](https://docs.stripe.com/sandboxes)
   - The official Stripe CLI supports a temporary sandbox through `stripe sandbox create`. Its noninteractive attempt stopped because an owner email is required. No email was inferred from Git or sent, no sandbox was created, and no key was generated. Owner email is requested before retrying. CLI configuration and captured output are outside the repository in a private directory; never add them to Git.
 - Vercel: existing Next.js project `tripcooker`, Node 24.x, has no deployments or domains. Project reads succeed, but team-settings access for `lucidus-projects` returns 403; its billing plan and deployment authorization remain unverified. There is no locally installed Vercel CLI with independent authorization to use as fallback. Reconnect the appropriate scope before deployment. Hobby is noncommercial only; Pro currently starts at $20/month with one deploying seat, plus applicable usage/taxes. [Hobby rules](https://vercel.com/docs/plans/hobby), [Pro pricing](https://vercel.com/docs/plans/pro-plan)
+  - Subsequent official CLI fallback completed authentication and read the team: Hobby, active, owner access. This resolves the plan uncertainty through independent CLI credentials; the connector's team-settings endpoint still returns 403. The project environment-variable inventory is empty. For this owner's cost priority, Railway is the preferred host; no Vercel upgrade or deployment was made.
+- Railway: connected workspace `kurrea23's Projects` originally contained only `awardsignal`. Created a separate private `tripcooker` project with `staging`; `tripcooker-web` and five non-secret settings are staged, with no deployment/source/runtime. Service-config update on a staged-only service returned `Service Instance not found`; build/start/sleep/resource configuration is supplied by the new repository `railway.json` and remains to be hosted-verified. No project-specific compute, database, volume, bucket or domain has been launched. See [bootstrap plan](bootstrap-launch.md).
 - Production email: configure a real SMTP sender and the email-code template. Supabase's default sender only delivers to authorized organization team addresses and is not a public production email service. [SMTP setup](https://supabase.com/docs/guides/auth/auth-smtp)
 
 No provider subscription, plan upgrade, domain purchase or production deployment has been authorized by an account-selection answer or performed here. Published prices are guidance, not an account-specific cost confirmation. Secret credentials belong in ignored local files or provider secret settings, never this document.
