@@ -10,6 +10,7 @@ import {
   verifiedPrice,
 } from "@/lib/server/backend";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export function POST(request: Request) {
@@ -65,19 +66,28 @@ export function POST(request: Request) {
             "You already have a subscription. Open Manage billing to change it.",
           );
       }
+      let latestSession = "none";
       for await (const session of stripe.checkout.sessions.list({
         customer,
         limit: 100,
       })) {
+        if (latestSession === "none") latestSession = session.id;
         if (session.status === "open" && session.mode === "subscription") {
           if (session.metadata?.interval === body.data.interval)
             return json({ url: session.url });
           await stripe.checkout.sessions.expire(session.id);
         }
       }
+      const idempotencyKey = `tripcooker-checkout-${user.id}-${body.data.interval}-${latestSession}-${Math.floor(Date.now() / 600_000)}`;
+      // Stable for retries of the same purchase attempt, with eight pseudorandom letters.
+      const suffix = Array.from(
+        createHash("sha256").update(idempotencyKey).digest().subarray(0, 8),
+        (b) => String.fromCharCode(97 + (b % 26)),
+      ).join("");
       const session = await stripe.checkout.sessions.create(
         {
           mode: "subscription",
+          integration_identifier: `tripcooker_${suffix}`,
           customer,
           client_reference_id: user.id,
           line_items: [{ price, quantity: 1 }],
@@ -87,7 +97,7 @@ export function POST(request: Request) {
           subscription_data: { metadata: { tripcooker_user_id: user.id } },
         },
         {
-          idempotencyKey: `tripcooker-checkout-${user.id}-${Math.floor(Date.now() / 600_000)}`,
+          idempotencyKey,
         },
       );
       if (!session.url)

@@ -15,6 +15,19 @@ alter table public.tripcooker_billing enable row level security;
 revoke all on public.tripcooker_state, public.tripcooker_billing from anon, authenticated;
 grant all on public.tripcooker_state, public.tripcooker_billing to service_role;
 
+-- Minimal verified webhook receipts; no raw event bodies, contact details or card data.
+-- Receipts are audit evidence only, never a cached entitlement authority.
+create table if not exists public.tripcooker_billing_events (
+  event_id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  event_type text not null,
+  plan_observed text not null check (plan_observed in ('free', 'premium')),
+  processed_at timestamptz not null default now()
+);
+alter table public.tripcooker_billing_events enable row level security;
+revoke all on public.tripcooker_billing_events from anon, authenticated;
+grant all on public.tripcooker_billing_events to service_role;
+
 create or replace function public.save_tripcooker_state(p_user_id uuid, p_version bigint, p_data jsonb, p_premium boolean)
 returns bigint language plpgsql security invoker set search_path = public as $$
 declare old_data jsonb; old_version bigint; active_count integer; new_active boolean;

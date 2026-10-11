@@ -14,11 +14,12 @@ const { POST: checkout } =
 const { POST: portal } = await import("../../src/app/api/billing/portal/route");
 const ownID = "11111111-1111-4111-8111-111111111111";
 const db = emptyDatabase(ownID, "qa@example.com");
-let calls: { url: string; body: string }[] = [],
+let calls: { url: string; body: string; idempotencyKey: string | null }[] = [],
   rpcError = "",
   active = false,
   wrongPrice = false,
   open = false;
+let openInterval = "monthly";
 const realFetch = globalThis.fetch;
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -32,10 +33,15 @@ function installMock() {
   active = false;
   wrongPrice = false;
   open = false;
+  openInterval = "monthly";
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     const body = String(init?.body ?? "");
-    calls.push({ url, body });
+    calls.push({
+      url,
+      body,
+      idempotencyKey: new Headers(init?.headers).get("idempotency-key"),
+    });
     if (url.includes("/auth/v1/user")) {
       const token = new Headers(init?.headers).get("Authorization");
       return token === "Bearer valid"
@@ -63,12 +69,23 @@ function installMock() {
         : response(1);
     if (url.includes("/v1/prices/"))
       return response({
-        id: wrongPrice ? "price_wrong" : "price_monthly",
+        id: wrongPrice
+          ? "price_wrong"
+          : url.includes("price_yearly")
+            ? "price_yearly"
+            : "price_monthly",
         object: "price",
         active: true,
         currency: "usd",
-        unit_amount: wrongPrice ? 1999 : 799,
-        recurring: { interval: "month", interval_count: 1 },
+        unit_amount: wrongPrice
+          ? 1999
+          : url.includes("price_yearly")
+            ? 5900
+            : 799,
+        recurring: {
+          interval: url.includes("price_yearly") ? "year" : "month",
+          interval_count: 1,
+        },
       });
     if (url.includes("/v1/subscriptions"))
       return response({
@@ -79,6 +96,7 @@ function installMock() {
               {
                 id: "sub_1",
                 status: "active",
+                latest_invoice: { id: "in_1", status: "paid" },
                 items: {
                   data: [{ quantity: 1, price: { id: "price_monthly" } }],
                 },
@@ -87,8 +105,13 @@ function installMock() {
           : [],
       });
     if (url.includes("/v1/checkout/sessions")) {
+      if (url.endsWith("/expire")) {
+        open = false;
+        return response({ id: "cs_qa", status: "expired" });
+      }
       if (init?.method === "POST") {
         open = true;
+        openInterval = new URLSearchParams(body).get("metadata[interval]")!;
         return response({
           id: "cs_qa",
           url: "https://checkout.stripe.com/qa",
@@ -105,7 +128,7 @@ function installMock() {
                 mode: "subscription",
                 status: "open",
                 url: "https://checkout.stripe.com/qa",
-                metadata: { interval: "monthly" },
+                metadata: { interval: openInterval },
               },
             ]
           : [],
@@ -166,6 +189,36 @@ test("server API verifies identity, overwrites forged plan, and safely handles i
     const failure = await PUT(req("PUT", { data: db, version: 0 }));
     assert.equal(failure.status, 503);
     assert.ok(!(await failure.text()).includes("credentials"));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+test("changing billing interval replaces the open session without reusing its Stripe idempotency key", async () => {
+  installMock();
+  process.env.PAYMENTS_ENABLED = "true";
+  try {
+    assert.equal(
+      (await checkout(req("POST", { interval: "monthly" }))).status,
+      200,
+    );
+    assert.equal(
+      (await checkout(req("POST", { interval: "yearly" }))).status,
+      200,
+    );
+    const created = calls.filter(
+      (c) => c.url.endsWith("/checkout/sessions") && c.body,
+    );
+    assert.equal(created.length, 2);
+    assert.ok(calls.some((c) => c.url.endsWith("/expire")));
+    assert.notEqual(created[0].idempotencyKey, created[1].idempotencyKey);
+    assert.equal(
+      new URLSearchParams(created[1].body).get("line_items[0][price]"),
+      "price_yearly",
+    );
+    assert.match(
+      new URLSearchParams(created[1].body).get("integration_identifier")!,
+      /^tripcooker_[a-z]{8}$/,
+    );
   } finally {
     globalThis.fetch = realFetch;
   }

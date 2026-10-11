@@ -31,7 +31,9 @@ Account API verifies the bearer token with Supabase `getUser`; it does not accep
 
 The client serializes saves and retains failed edits. A visible banner offers retry/export and explicit reload for conflicts. Pending edits are kept in sessionStorage under an account-specific key; this is recovery within the current browser session, not offline-first cloud sync. Refreshing from account is explicit. It is not live multi-user collaboration.
 
-Subscription status is read directly from Stripe on account reads/writes. There is no webhook-driven entitlement cache. Thus canceled/past-due/incomplete subscriptions do not receive stale paid access, and out-of-order webhooks cannot grant it. A Stripe outage causes saving/loading for billing-linked customers to fail visibly rather than silently treating them as Free or overwriting data. This design has additional Stripe API latency/usage; monitor it before scaling. Purchase redirect alone never upgrades an account.
+Subscription status is read directly from Stripe on account reads/writes. Pro requires an active subscription with a configured price, quantity 1 and a paid latest invoice; delayed payment methods cannot grant access solely from active status. There is no webhook-driven entitlement cache. Canceled/past-due/incomplete subscriptions do not receive stale paid access, and out-of-order webhooks cannot grant it. A Stripe outage causes saving/loading for billing-linked customers to fail visibly rather than silently treating them as Free or overwriting data. This design has additional Stripe API latency/usage; monitor it before scaling. Purchase redirect alone never upgrades an account.
+
+Register `https://tripcooker.com/api/billing/webhook` in the selected live Stripe account and the actual staging origin's corresponding endpoint in its sandbox. Store each endpoint's own `STRIPE_WEBHOOK_SECRET` privately on its host. Subscribe to `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid` and `invoice.payment_failed`. The handler verifies signatures against the untouched body, checks test/live mode, looks up the customer through the server-owned mapping, re-reads current paid subscription state and stores a minimal deduplicated receipt. It never saves raw event bodies or contact/card details. Receipts are audit evidence, not access grants. Failed writes return a non-2xx response for Stripe retries. Processing is synchronous for this MVP; monitor delivery latency and introduce a durable queue before volume requires one. No webhook endpoint has been registered remotely yet. [Stripe webhook guidance](https://docs.stripe.com/webhooks)
 
 ## Acceptance and evidence
 
@@ -47,7 +49,8 @@ Required real-service checks before release:
 - Free second-trip gate and free archive/complete/reactivation limit.
 - Monthly/yearly test purchase; declining card, canceled checkout and repeated clicks.
 - Checkout configured price/currency matches exactly; unsupported price rejects.
-- Current active subscription grants Pro after account refresh; redirect/query/local storage cannot grant it.
+- Current active subscription with a paid latest invoice grants Pro after account refresh; redirect/query/local storage cannot grant it. Pending asynchronous payments remain Free.
+- Hosted webhook delivery, duplicate retry, canceled subscription followed by an old active event, and payment failure must leave the correct current access. Verify signature rejection and durable receipts without printing secrets or raw payloads.
 - Billing portal ownership, cancellation, failed renewal/past-due state and preserved trip access.
 - Stripe/database interruption, hosted request-size limit, database backup/restore and support flow.
 - Mobile/desktop layout, all public routes and a human review of policies/support.
@@ -55,7 +58,7 @@ Required real-service checks before release:
 
 ## Current verification result
 
-- 14 automated tests pass (10 core/database/store, 2 production-build guard, and 2 API/billing tests).
+- 17 automated tests pass (10 core/database/store, 2 production-build guard, 3 API/billing tests and 2 signed webhook tests).
 - ESLint and Next.js production build pass.
 - `npm audit --omit=dev` reports zero vulnerabilities. Full audit retains five development-only ESLint dependency advisories.
 - Local live-mode API rejects unauthenticated state access with 401 and disabled checkout with 503.

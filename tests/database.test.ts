@@ -82,6 +82,17 @@ test("Postgres migration enforces private access, free limits, stale-write rejec
       "insert into tripcooker_billing(user_id,customer_id) values ($1,$2)",
       [a, "cus_qa"],
     );
+    await pg.query(
+      "insert into tripcooker_billing_events(event_id,user_id,event_type,plan_observed) values ('evt_qa',$1,'invoice.paid','premium')",
+      [a],
+    );
+    await assert.rejects(
+      pg.query(
+        "insert into tripcooker_billing_events(event_id,user_id,event_type,plan_observed) values ('evt_qa',$1,'invoice.paid','premium')",
+        [a],
+      ),
+      /duplicate key/,
+    );
     assert.equal(
       (
         await pg.query<{ locked: boolean }>(
@@ -134,6 +145,10 @@ test("Postgres migration enforces private access, free limits, stale-write rejec
       /permission denied/,
     );
     await assert.rejects(
+      pg.query("select * from tripcooker_billing_events"),
+      /permission denied/,
+    );
+    await assert.rejects(
       pg.query("select save_tripcooker_state($1,0,$2::jsonb,true)", [
         b,
         JSON.stringify(initial),
@@ -145,6 +160,15 @@ test("Postgres migration enforces private access, free limits, stale-write rejec
     assert.equal(
       (await pg.query("select * from tripcooker_state where user_id=$1", [a]))
         .rows.length,
+      0,
+    );
+    assert.equal(
+      (
+        await pg.query(
+          "select * from tripcooker_billing_events where user_id=$1",
+          [a],
+        )
+      ).rows.length,
       0,
     );
   } finally {

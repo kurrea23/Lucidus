@@ -67,8 +67,7 @@ export async function api(action: () => Promise<Response>): Promise<Response> {
     // Never return provider errors, secrets, or raw request bodies to clients/logs.
     return json(
       {
-        error:
-          "The service is temporarily unavailable. Please try again.",
+        error: "The service is temporarily unavailable. Please try again.",
       },
       503,
     );
@@ -83,6 +82,14 @@ export function json(value: unknown, status = 200) {
 export async function readJSON(request: Request) {
   if (!request.headers.get("content-type")?.includes("application/json"))
     throw new ApiError(415, "Send JSON data.");
+  const bytes = await readBody(request);
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new ApiError(400, "Invalid JSON data.");
+  }
+}
+export async function readBody(request: Request) {
   const reader = request.body?.getReader();
   if (!reader) throw new ApiError(400, "Missing request data.");
   let size = 0;
@@ -106,11 +113,7 @@ export async function readJSON(request: Request) {
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    throw new ApiError(400, "Invalid JSON data.");
-  }
+  return bytes;
 }
 export async function customerID(
   db: ReturnType<typeof adminDB>,
@@ -130,6 +133,11 @@ export async function planFor(
 ): Promise<"free" | "premium"> {
   const customer = await customerID(db, userID);
   if (!customer) return "free";
+  return planForCustomer(customer);
+}
+export async function planForCustomer(
+  customer: string,
+): Promise<"free" | "premium"> {
   const stripe = stripeClient();
   const allowed = [
     process.env.STRIPE_MONTHLY_PRICE_ID,
@@ -140,14 +148,21 @@ export async function planFor(
     customer,
     status: "all",
     limit: 100,
+    expand: ["data.latest_invoice"],
   })) {
     if (
       sub.status === "active" &&
       sub.items.data.some(
         (i) => allowed.includes(i.price.id) && i.quantity === 1,
       )
-    )
-      return "premium";
+    ) {
+      // Delayed payment methods can mark a subscription active before funds succeed.
+      const invoice =
+        typeof sub.latest_invoice === "string"
+          ? await stripe.invoices.retrieve(sub.latest_invoice)
+          : sub.latest_invoice;
+      if (invoice?.status === "paid") return "premium";
+    }
   }
   return "free";
 }
@@ -155,19 +170,17 @@ export async function loadState(
   db: ReturnType<typeof adminDB>,
   user: { id: string; email?: string; created_at: string },
 ) {
-  const { error: initError } = await db
-    .from("tripcooker_state")
-    .upsert(
-      {
-        user_id: user.id,
-        data: emptyDatabase(
-          user.id,
-          user.email,
-          new Date(user.created_at).toISOString(),
-        ),
-      },
-      { onConflict: "user_id", ignoreDuplicates: true },
-    );
+  const { error: initError } = await db.from("tripcooker_state").upsert(
+    {
+      user_id: user.id,
+      data: emptyDatabase(
+        user.id,
+        user.email,
+        new Date(user.created_at).toISOString(),
+      ),
+    },
+    { onConflict: "user_id", ignoreDuplicates: true },
+  );
   if (initError) throw initError;
   const { data, error } = await db
     .from("tripcooker_state")
