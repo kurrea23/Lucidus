@@ -71,20 +71,47 @@ export function schemaHash(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-export function restoreEntries(toc) {
+export function restoreEntries(toc, authDependencies = []) {
   const entries = toc.split("\n").filter((line) => {
     if (!/^\d+;/.test(line)) return false;
     // A fresh Supabase project already owns its managed auth schema and migrations.
     if (/ TABLE DATA auth (migrations|schema_migrations)\s/.test(line)) return false;
     if (/ (TABLE DATA|SEQUENCE SET) auth /.test(line)) return true;
     if (/ SCHEMA - public\s/.test(line)) return false;
+    // Supabase owns platform defaults. The project postgres login cannot alter
+    // those roles; retain the target's defaults and restore our own ACLs only.
+    if (/ DEFAULT ACL public /.test(line) && !/\spostgres\s*$/.test(line)) return false;
     return / public /.test(line);
   });
   const required = ["tripcooker_state", "tripcooker_billing", "tripcooker_billing_events", "tripcooker_request_limits"];
   if (required.some((table) => !entries.some((line) => line.includes(` TABLE DATA public ${table} `))) ||
       !entries.some((line) => / TABLE DATA auth users\s/.test(line)))
     throw new BackupError("Archive does not contain TripCooker state and account data.");
-  return entries.join("\n") + "\n";
+  // Managed auth constraints already exist in the target. Load parents first,
+  // rather than disabling triggers or assuming pg_dump's table-data order.
+  const authData = new Map(entries.flatMap((line) => {
+    const table = line.match(/ TABLE DATA auth (\S+)\s/);
+    return table ? [[table[1], line]] : [];
+  }));
+  const ordered = [], visiting = new Set(), visited = new Set();
+  function visit(table) {
+    if (visited.has(table) || !authData.has(table)) return;
+    if (visiting.has(table)) throw new BackupError("Managed auth dependencies contain a cycle. Review the restore before proceeding.");
+    visiting.add(table);
+    for (const edge of authDependencies)
+      if (edge.table === table && edge.dependsOn !== table) visit(edge.dependsOn);
+    visiting.delete(table);
+    visited.add(table);
+    ordered.push(authData.get(table));
+  }
+  for (const table of authData.keys()) visit(table);
+  let inserted = false;
+  return entries.flatMap((line) => {
+    if (!/ TABLE DATA auth /.test(line)) return [line];
+    if (inserted) return [];
+    inserted = true;
+    return ordered;
+  }).join("\n") + "\n";
 }
 
 export function validateRestoreTarget(manifest, target, confirmation, targetSchemaHash, emptyState) {

@@ -56,11 +56,23 @@ test("restore includes every TripCooker table and auth users while preserving ma
     "10; 0 9 TABLE DATA public tripcooker_billing_events postgres",
     "11; 0 10 TABLE DATA public tripcooker_request_limits postgres",
     "12; 0 11 ACL public TABLE tripcooker_state postgres",
+    "13; 0 12 TABLE DATA auth identities postgres",
+    "14; 0 13 TABLE DATA auth refresh_tokens postgres",
+    "15; 0 14 TABLE DATA auth sessions postgres",
+    "16; 826 15 DEFAULT ACL public DEFAULT PRIVILEGES FOR TABLES supabase_admin",
+    "17; 826 16 DEFAULT ACL public DEFAULT PRIVILEGES FOR FUNCTIONS postgres",
   ].join("\n");
   const selected = restoreEntries(toc);
   assert.match(selected, /TABLE DATA auth users/);
   assert.match(selected, /TABLE public tripcooker_state/);
   assert.match(selected, /ACL public TABLE tripcooker_state/);
   assert.doesNotMatch(selected, /SCHEMA - public|TABLE auth users|schema_migrations|DATA auth migrations/);
+  assert.doesNotMatch(selected, /DEFAULT PRIVILEGES FOR TABLES supabase_admin/);
+  assert.match(selected, /DEFAULT PRIVILEGES FOR FUNCTIONS postgres/);
   assert.throws(() => restoreEntries(toc.replace("TABLE DATA public tripcooker_billing ", "TABLE DATA public missing ")));
+  const dependencies = [{ table: "identities", dependsOn: "users" }, { table: "sessions", dependsOn: "users" }, { table: "refresh_tokens", dependsOn: "sessions" }];
+  const reordered = restoreEntries(toc.replace("4; 1259 4 TABLE DATA auth users postgres", "" ) + "\n4; 1259 4 TABLE DATA auth users postgres", dependencies);
+  assert.ok(reordered.indexOf("TABLE DATA auth users") < reordered.indexOf("TABLE DATA auth identities"));
+  assert.ok(reordered.indexOf("TABLE DATA auth sessions") < reordered.indexOf("TABLE DATA auth refresh_tokens"));
+  assert.throws(() => restoreEntries(toc, [...dependencies, { table: "users", dependsOn: "identities" }]), /cycle/);
 });

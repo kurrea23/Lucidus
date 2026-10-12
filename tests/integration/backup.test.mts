@@ -36,15 +36,21 @@ test("PostgreSQL backup and isolated restore preserve accounts, trips, billing, 
       })).stdout.trim();
     }
     await query("postgres", "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN BYPASSRLS");
+    await query("postgres", "CREATE ROLE provider_fixture NOLOGIN");
     await query("postgres", "CREATE DATABASE source_fixture");
     await query("postgres", "CREATE DATABASE restore_fixture");
-    const authSchema = "CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY, email text); CREATE TABLE auth.schema_migrations(version text PRIMARY KEY); INSERT INTO auth.schema_migrations VALUES ('managed-baseline-v1')";
+    const authSchema = "CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY, email text); CREATE TABLE auth.identities(id uuid PRIMARY KEY, user_id uuid REFERENCES auth.users); CREATE TABLE auth.sessions(id uuid PRIMARY KEY, user_id uuid REFERENCES auth.users); CREATE TABLE auth.refresh_tokens(id uuid PRIMARY KEY, session_id uuid REFERENCES auth.sessions); CREATE TABLE auth.schema_migrations(version text PRIMARY KEY); INSERT INTO auth.schema_migrations VALUES ('managed-baseline-v1')";
     await query("source_fixture", authSchema);
     await query("restore_fixture", authSchema);
+    const alwaysCheckIdentity = "DO $$ DECLARE t record; BEGIN FOR t IN SELECT tgname FROM pg_trigger WHERE tgrelid='auth.identities'::regclass LOOP EXECUTE format('ALTER TABLE auth.identities ENABLE ALWAYS TRIGGER %I', t.tgname); END LOOP; END $$";
+    await query("source_fixture", alwaysCheckIdentity);
+    await query("restore_fixture", alwaysCheckIdentity);
+    await query("source_fixture", "ALTER DEFAULT PRIVILEGES FOR ROLE provider_fixture IN SCHEMA public GRANT SELECT ON TABLES TO anon");
     await query("source_fixture", await readFile("supabase/launch.sql", "utf8"));
     const user = "11111111-1111-4111-8111-111111111111";
     const tripData = { user: { id: user, email: "fixture@example.com", plan: "free" }, trips: [{ id: "trip-fixture", status: "planning", destination: "Synthetic destination" }] };
     await query("source_fixture", `INSERT INTO auth.users VALUES ('${user}', 'fixture@example.com'); INSERT INTO public.tripcooker_state(user_id, data, version) VALUES ('${user}', '${JSON.stringify(tripData)}', 5); INSERT INTO public.tripcooker_billing(user_id, customer_id) VALUES ('${user}', 'cus_fixture'); INSERT INTO public.tripcooker_billing_events(event_id, user_id, event_type, plan_observed) VALUES ('evt_fixture', '${user}', 'invoice.paid', 'free'); INSERT INTO public.tripcooker_request_limits(user_id, request_count) VALUES ('${user}', 3)`);
+    await query("source_fixture", `INSERT INTO auth.identities VALUES ('${user}','${user}'); INSERT INTO auth.sessions VALUES ('${user}','${user}'); INSERT INTO auth.refresh_tokens VALUES ('${user}','${user}')`);
     const privateEnv = {
       ...baseEnv,
       TRIPCOOKER_BACKUP_KEY_FILE: join(folder, "key"),
@@ -77,7 +83,10 @@ test("PostgreSQL backup and isolated restore preserve accounts, trips, billing, 
     assert.equal(await query("restore_fixture", "SELECT event_id FROM public.tripcooker_billing_events"), "evt_fixture");
     assert.equal(await query("restore_fixture", "SELECT request_count FROM public.tripcooker_request_limits"), "3");
     assert.equal(await query("restore_fixture", "SELECT email FROM auth.users"), "fixture@example.com");
+    assert.equal(await query("restore_fixture", "SELECT count(*) FROM auth.identities JOIN auth.users ON users.id=identities.user_id"), "1");
+    assert.equal(await query("restore_fixture", "SELECT count(*) FROM auth.refresh_tokens JOIN auth.sessions ON sessions.id=refresh_tokens.session_id"), "1");
     assert.equal(await query("restore_fixture", "SELECT count(*) FROM auth.schema_migrations"), "1");
+    assert.equal(await query("restore_fixture", "SELECT count(*) FROM pg_default_acl WHERE defaclrole='provider_fixture'::regrole"), "0");
     assert.equal(await query("restore_fixture", "SELECT count(*) FROM pg_class WHERE relname LIKE 'tripcooker_%' AND relkind = 'r' AND relrowsecurity"), "4");
     assert.equal(await query("restore_fixture", "SELECT has_table_privilege('anon', 'public.tripcooker_state', 'SELECT')"), "f");
     assert.equal(await query("restore_fixture", "SELECT has_table_privilege('service_role', 'public.tripcooker_state', 'SELECT')"), "t");

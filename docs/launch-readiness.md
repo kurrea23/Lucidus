@@ -90,3 +90,8 @@ Next.js upgraded from 16.2.9 to 16.4.0 after audit reported a critical advisory.
 The owner purchased `tripcooker.com` and explicitly selected it for this launch. No provider subscription, plan upgrade or production deployment has been performed here. Published prices are guidance, not an account-specific cost confirmation. Secret credentials belong in ignored local files or provider secret settings, never this document.
 
 Provider references: [Supabase verified user](https://supabase.com/docs/reference/javascript/auth-getuser), [Supabase email code](https://supabase.com/docs/reference/javascript/auth-signinwithotp), [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [Stripe hosted subscriptions](https://docs.stripe.com/payments/checkout/build-subscriptions.md?payment-ui=stripe-hosted), [Stripe customer portal](https://docs.stripe.com/customer-management), [Stripe subscription limits](https://docs.stripe.com/payments/checkout/limit-subscriptions).
+
+
+## Backup update — 2026-10-12
+
+Private encrypted Drive upload/download/authentication and isolated hosted database recovery passed, including restored saves and conflict rejection. The owner confirmed a separate recovery-key copy. Daily 08:00 local Codex backup scheduling, 30-day retention and failure-only notifications are configured; today's live pipeline passed. Future unattended scheduling and notification delivery remain unobserved. The Mac and Codex must be available. Recovered-account sign-in remains pending. This authorizes backup retention only; public policies and live payments remain gated. See [backup runbook](backup-recovery.md).

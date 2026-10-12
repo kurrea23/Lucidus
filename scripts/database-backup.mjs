@@ -9,6 +9,7 @@ import { BackupError, connectionSettings, MAX_BACKUP_BYTES, openBackup, restoreE
 const repository = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const schemaQuery = `SELECT coalesce(string_agg(table_name || '.' || column_name || ':' || data_type || ':' || udt_name || ':' || is_nullable, E'\n' ORDER BY table_name, ordinal_position), '') FROM information_schema.columns WHERE table_schema = 'auth'`;
 const emptyQuery = `SELECT (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE')::text || ':' || (SELECT count(*) FROM auth.users)::text`;
+const authDependenciesQuery = `SELECT coalesce(json_agg(json_build_object('table', c.relname, 'dependsOn', r.relname) ORDER BY c.relname, r.relname), '[]'::json)::text FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_class r ON r.oid=k.confrelid JOIN pg_namespace rn ON rn.oid=r.relnamespace WHERE k.contype='f' AND n.nspname='auth' AND rn.nspname='auth'`;
 
 async function privateDirectory(value) {
   if (!value) throw new BackupError("Configure a private backup directory outside the repository.");
@@ -122,9 +123,10 @@ async function main() {
     const entriesFile = join(temporary, "entries.txt");
     await writeFile(archiveFile, archive, { flag: "wx", mode: 0o600 });
     const toc = (await run("pg_restore", ["--list", archiveFile], { PATH: process.env.PATH })).toString("utf8");
-    await writeFile(entriesFile, restoreEntries(toc), { flag: "wx", mode: 0o600 });
+    const authDependencies = JSON.parse(await query(target, authDependenciesQuery));
+    await writeFile(entriesFile, restoreEntries(toc, authDependencies), { flag: "wx", mode: 0o600 });
     await run("pg_restore", ["--no-password", "--no-owner", "--single-transaction", "--exit-on-error", "--use-list", entriesFile, "--dbname", target.env.PGDATABASE, archiveFile],
-      { ...target.env, PGOPTIONS: "-c session_replication_role=replica" });
+      target.env);
     console.log("Restore completed in the isolated project. Verify access policies, accounts, trip counts, billing mappings and deletion exclusions before use.");
   } finally { await rm(temporary, { recursive: true, force: true }); }
 }
