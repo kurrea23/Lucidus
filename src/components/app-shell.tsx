@@ -16,6 +16,7 @@ import { activeTrips, useDB } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { AccountGate } from "./account-provider";
 import { SaveStatus } from "./save-status";
+import { SiteFooter } from "./site-footer";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -130,6 +131,7 @@ export function AppShell({ children, publicPage = false }: { children: React.Rea
         </header>
 
         <main className="flex-1 pb-24 md:pb-10">{publicPage ? children : <AccountGate><SaveStatus />{children}</AccountGate>}</main>
+        <SiteFooter className="mb-16 md:mb-0" />
 
         {/* Mobile bottom nav */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 flex border-t border-sand-200 bg-white">

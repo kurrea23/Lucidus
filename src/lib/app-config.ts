@@ -1,4 +1,17 @@
 // Public switches only. Secrets belong in src/lib/server and server environment variables.
+import policyRelease from "./policy-release.json";
+export const POLICY_RELEASE = policyRelease;
+export function approvedPolicies(
+  version = process.env.NEXT_PUBLIC_APPROVED_POLICY_VERSION,
+  email = process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
+) {
+  return version === POLICY_RELEASE.version &&
+    /^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(email ?? "");
+}
+export const POLICIES_APPROVED = approvedPolicies();
+export const SUPPORT_EMAIL = /^[^\s@?&#]+@[^\s@?&#]+\.[^\s@?&#]+$/.test(
+  process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? "",
+) ? process.env.NEXT_PUBLIC_SUPPORT_EMAIL! : "";
 export const LIVE_MODE = process.env.NEXT_PUBLIC_APP_MODE === "live";
 export const AUTH_CONFIGURED = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&

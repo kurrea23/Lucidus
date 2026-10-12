@@ -4,6 +4,7 @@ import {
   appURL,
   customerID,
   json,
+  portalConfiguration,
   requireUser,
   stripeClient,
 } from "@/lib/server/backend";
@@ -17,6 +18,7 @@ export function POST(request: Request) {
       url: (
         await stripeClient().billingPortal.sessions.create({
           customer,
+          configuration: await portalConfiguration(),
           return_url: `${appURL()}/premium`,
         })
       ).url,

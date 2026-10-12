@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteFooter } from "@/components/site-footer";
 import {
   CalendarDays,
   Check,
@@ -209,10 +210,7 @@ export default function LandingPage() {
         </Card>
       </section>
 
-      <footer className="border-t border-sand-200 py-8 text-center text-sm text-charcoal-400">
-        TripCooker — turn scattered travel ideas into a cooked plan.
-        <p className="mx-auto mt-2 max-w-lg px-4">Editable planning templates and estimated budgets. Confirm all bookings, prices, and event information independently.</p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

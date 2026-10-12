@@ -12,6 +12,7 @@ import {
 } from "@/lib/server/backend";
 import { z } from "zod";
 import { createHash } from "node:crypto";
+import { POLICY_RELEASE } from "@/lib/app-config";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export function POST(request: Request) {
@@ -94,9 +95,15 @@ export function POST(request: Request) {
           customer,
           client_reference_id: user.id,
           line_items: [{ price, quantity: 1 }],
+          consent_collection: { terms_of_service: "required" },
+          custom_text: {
+            terms_of_service_acceptance: {
+              message: `I agree to the [TripCooker Terms](${origin}/terms) and [Cancellation and refund policy](${origin}/refunds).`,
+            },
+          },
           success_url: `${origin}/premium?checkout=complete`,
           cancel_url: `${origin}/premium?checkout=cancelled`,
-          metadata: { interval: body.data.interval },
+          metadata: { interval: body.data.interval, policy_version: POLICY_RELEASE.version },
           subscription_data: { metadata: { tripcooker_user_id: user.id } },
         },
         {

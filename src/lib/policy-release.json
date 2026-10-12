@@ -1,0 +1,7 @@
+{
+  "version": "2026-10-11-v1",
+  "operatorName": "Lucidum L.C.",
+  "firstPaymentRefundDays": 7,
+  "deletionWindowDays": 30,
+  "backupRetentionDays": 30
+}

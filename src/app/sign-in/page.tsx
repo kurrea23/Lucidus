@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { useAccount } from "@/components/account-provider";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SiteFooter } from "@/components/site-footer";
 export default function SignInPage() {
   const router = useRouter();
   const account = useAccount();
@@ -47,6 +48,7 @@ export default function SignInPage() {
     }
   }
   return (
+    <>
     <main className="mx-auto max-w-md px-4 py-12">
       <Link href="/" className="font-bold text-ocean-700">
         TripCooker
@@ -99,6 +101,7 @@ export default function SignInPage() {
               />
             </div>
           )}
+          {!sent && <p className="text-xs leading-5 text-charcoal-500">By requesting a code, you confirm you are 18 or older and agree to the <Link href="/terms" className="underline">Terms</Link>. Read our <Link href="/privacy" className="underline">Privacy policy</Link> to learn how your account and travel data are used.</p>}
           <Button type="submit" disabled={busy}>
             {busy
               ? "Please wait…"
@@ -125,5 +128,7 @@ export default function SignInPage() {
         </form>
       )}
     </main>
+    <SiteFooter />
+    </>
   );
 }

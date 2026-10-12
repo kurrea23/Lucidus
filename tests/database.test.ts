@@ -9,7 +9,13 @@ test("Postgres migration enforces private access, free limits, stale-write rejec
     await pg.exec(
       "create schema auth; create table auth.users(id uuid primary key); create role anon; create role authenticated; create role service_role bypassrls; grant usage on schema public to anon, authenticated, service_role;",
     );
+    // Optional Supabase setup helper starts with PostgreSQL's PUBLIC execute grant.
+    await pg.exec("create function public.rls_auto_enable() returns event_trigger language plpgsql security definer as $$ begin return; end $$;");
     await pg.exec(readFileSync("supabase/launch.sql", "utf8"));
+    assert.deepEqual(
+      (await pg.query("select has_function_privilege('anon','public.rls_auto_enable()','EXECUTE') as anon_execute, has_function_privilege('authenticated','public.rls_auto_enable()','EXECUTE') as browser_execute, has_function_privilege(current_user,'public.rls_auto_enable()','EXECUTE') as owner_execute")).rows[0],
+      { anon_execute: false, browser_execute: false, owner_execute: true },
+    );
     const a = "11111111-1111-4111-8111-111111111111",
       b = "22222222-2222-4222-8222-222222222222";
     await pg.query("insert into auth.users values ($1),($2)", [a, b]);

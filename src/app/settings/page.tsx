@@ -99,6 +99,7 @@ export default function SettingsPage() {
               <Button variant="outline" onClick={exportTripData}>
                 Export my data
               </Button>
+              <p className="text-sm text-charcoal-500">To close your entire account or ask a privacy question, <Link href="/support" className="underline">contact support</Link>. Deleting trip data does not cancel billing.</p>
               {LIVE_MODE && (
                 <Button
                   variant="outline"

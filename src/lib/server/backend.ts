@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
-import { LIVE_MODE, PRICING } from "../app-config";
+import { approvedPolicies, LIVE_MODE, PRICING } from "../app-config";
 import { emptyDatabase, type DB } from "../database";
 
 export class ApiError extends Error {
@@ -31,11 +31,13 @@ export function stripeClient() {
   });
 }
 export async function checkoutAvailable(): Promise<boolean> {
+  if (process.env.TRIPCOOKER_FREE_LAUNCH === "true") return false;
   if (process.env.PAYMENTS_ENABLED !== "true") return false;
   const key = process.env.STRIPE_SECRET_KEY ?? "";
   // Sandboxes can exercise checkout without enabling real merchant payouts.
   if (/^[sr]k_test_/.test(key)) return true;
   if (!/^[sr]k_live_/.test(key)) return false;
+  if (!approvedPolicies()) return false;
   try {
     // Check our own merchant account, never an ID supplied by the customer.
     const account = await stripeClient().accounts.retrieve(null);
@@ -44,6 +46,18 @@ export async function checkoutAvailable(): Promise<boolean> {
     // Missing account-read permission or a provider outage must close checkout.
     return false;
   }
+}
+export async function portalConfiguration() {
+  const id = process.env.STRIPE_PORTAL_CONFIGURATION_ID;
+  if (!id) throw new ApiError(503, "Billing management is not available yet. Contact support.");
+  const configuration = await stripeClient().billingPortal.configurations.retrieve(id);
+  if (
+    configuration.active !== true || configuration.is_default !== false ||
+    configuration.metadata?.app !== "tripcooker" ||
+    configuration.features.subscription_cancel.enabled !== true ||
+    configuration.features.subscription_cancel.mode !== "at_period_end"
+  ) throw new ApiError(503, "Billing management is temporarily unavailable. Contact support.");
+  return id;
 }
 export function appURL() {
   const value = process.env.APP_URL;
@@ -224,14 +238,17 @@ export async function verifiedPrice(interval: keyof typeof PRICING) {
       : process.env.STRIPE_YEARLY_PRICE_ID;
   if (!id)
     throw new ApiError(503, "This subscription option is not available yet.");
-  const price = await stripeClient().prices.retrieve(id);
+  const price = await stripeClient().prices.retrieve(id, { expand: ["product"] });
   const expected = PRICING[interval];
+  const product = price.product;
   if (
     !price.active ||
     price.currency !== "usd" ||
     price.unit_amount !== expected.cents ||
     price.recurring?.interval !== expected.interval ||
-    price.recurring?.interval_count !== 1
+    price.recurring?.interval_count !== 1 ||
+    typeof product === "string" || !("active" in product) || !product.active ||
+    product.metadata.app !== "tripcooker"
   )
     throw new ApiError(503, "This subscription option is not available yet.");
   return price.id;

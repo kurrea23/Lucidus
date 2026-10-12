@@ -7,7 +7,10 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = "qa-not-a-real-key";
 process.env.STRIPE_SECRET_KEY = "sk_test_not_a_real_key";
 process.env.STRIPE_MONTHLY_PRICE_ID = "price_monthly";
 process.env.STRIPE_YEARLY_PRICE_ID = "price_yearly";
+process.env.STRIPE_PORTAL_CONFIGURATION_ID = "bpc_qa";
 process.env.APP_URL = "https://tripcooker.example";
+process.env.NEXT_PUBLIC_SUPPORT_EMAIL = "support@example.com";
+process.env.NEXT_PUBLIC_APPROVED_POLICY_VERSION = "2026-10-11-v1";
 const { GET, PUT } = await import("../../src/app/api/state/route");
 const { POST: checkout } =
   await import("../../src/app/api/billing/checkout/route");
@@ -22,6 +25,7 @@ let calls: { url: string; body: string; idempotencyKey: string | null }[] = [],
   open = false;
 let openInterval = "monthly";
 let payoutsEnabled = false, chargesEnabled = true, accountError = false;
+let portalActive = true, portalDefault = false, portalApp = "tripcooker", portalCancelMode = "at_period_end", wrongProduct = false;
 const realFetch = globalThis.fetch;
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -39,6 +43,11 @@ function installMock() {
   payoutsEnabled = false;
   chargesEnabled = true;
   accountError = false;
+  portalActive = true;
+  portalDefault = false;
+  portalApp = "tripcooker";
+  portalCancelMode = "at_period_end";
+  wrongProduct = false;
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     const body = String(init?.body ?? "");
@@ -84,6 +93,7 @@ function installMock() {
             ? "price_yearly"
             : "price_monthly",
         object: "price",
+        product: { id: "prod_qa", active: true, metadata: { app: wrongProduct ? "other" : "tripcooker" } },
         active: true,
         currency: "usd",
         unit_amount: wrongPrice
@@ -143,6 +153,8 @@ function installMock() {
           : [],
       });
     }
+    if (url.includes("/v1/billing_portal/configurations/"))
+      return response({ id: "bpc_qa", active: portalActive, is_default: portalDefault, metadata: { app: portalApp }, features: { subscription_cancel: { enabled: true, mode: portalCancelMode } } });
     if (url.includes("/v1/billing_portal/sessions"))
       return response({ url: "https://billing.stripe.com/qa" });
     throw new Error("Unexpected mocked endpoint: " + url);
@@ -222,12 +234,25 @@ test("live checkout requires enabled charges and payouts, fails closed, and pres
     assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
     assert.equal((await (await billingStatus(req())).json()).checkoutAvailable, false);
     accountError = false;
+    process.env.NEXT_PUBLIC_APPROVED_POLICY_VERSION = "old-policy";
+    assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
+    process.env.NEXT_PUBLIC_APPROVED_POLICY_VERSION = "2026-10-11-v1";
+    process.env.NEXT_PUBLIC_SUPPORT_EMAIL = "";
+    assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
+    process.env.NEXT_PUBLIC_SUPPORT_EMAIL = "support@example.com";
     assert.equal((await (await billingStatus(req())).json()).checkoutAvailable, true);
     assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 200);
     // Invalid credentials must not be treated as sandbox access.
     process.env.STRIPE_SECRET_KEY = "not_a_stripe_key";
     assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
+    process.env.STRIPE_SECRET_KEY = "sk_test_not_a_real_key";
+    process.env.TRIPCOOKER_FREE_LAUNCH = "true";
+    assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
+    assert.equal((await (await billingStatus(req())).json()).checkoutAvailable, false);
   } finally {
+    delete process.env.TRIPCOOKER_FREE_LAUNCH;
+    process.env.NEXT_PUBLIC_APPROVED_POLICY_VERSION = "2026-10-11-v1";
+    process.env.NEXT_PUBLIC_SUPPORT_EMAIL = "support@example.com";
     process.env.STRIPE_SECRET_KEY = "sk_test_not_a_real_key";
     globalThis.fetch = realFetch;
   }
@@ -254,6 +279,9 @@ test("changing billing interval replaces the open session without reusing its St
       new URLSearchParams(created[1].body).get("line_items[0][price]"),
       "price_yearly",
     );
+    assert.equal(new URLSearchParams(created[1].body).get("consent_collection[terms_of_service]"), "required");
+    assert.equal(new URLSearchParams(created[1].body).get("metadata[policy_version]"), "2026-10-11-v1");
+    assert.match(new URLSearchParams(created[1].body).get("custom_text[terms_of_service_acceptance][message]")!, /TripCooker Terms.*https:\/\/tripcooker\.example\/terms.*https:\/\/tripcooker\.example\/refunds/);
     assert.match(
       new URLSearchParams(created[1].body).get("integration_identifier")!,
       /^tripcooker_[a-z]{8}$/,
@@ -285,6 +313,9 @@ test("billing uses configured price and owned customer, reuses checkout and reje
       503,
     );
     wrongPrice = false;
+    wrongProduct = true;
+    assert.equal((await checkout(req("POST", { interval: "monthly" }))).status, 503);
+    wrongProduct = false;
     assert.equal(
       (await checkout(req("POST", { interval: "monthly" }))).status,
       200,
@@ -325,7 +356,34 @@ test("billing uses configured price and owned customer, reuses checkout and reje
       ).get("customer"),
       "cus_own",
     );
+    assert.equal(new URLSearchParams(calls.findLast((c) => c.url.includes("/billing_portal/sessions"))!.body).get("configuration"), "bpc_qa");
   } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("billing management rejects the shared default, inactive or foreign portals and unsupported cancellation rules", async () => {
+  installMock();
+  try {
+    portalDefault = true;
+    assert.equal((await portal(req("POST"))).status, 503);
+    portalDefault = false;
+    portalActive = false;
+    assert.equal((await portal(req("POST"))).status, 503);
+    portalActive = true;
+    portalApp = "other-business";
+    assert.equal((await portal(req("POST"))).status, 503);
+    portalApp = "tripcooker";
+    portalCancelMode = "immediately";
+    assert.equal((await portal(req("POST"))).status, 503);
+    portalCancelMode = "at_period_end";
+    delete process.env.STRIPE_PORTAL_CONFIGURATION_ID;
+    assert.equal((await portal(req("POST"))).status, 503);
+    assert.ok(!calls.some((c) => c.url.includes("/billing_portal/sessions")));
+    process.env.STRIPE_PORTAL_CONFIGURATION_ID = "bpc_qa";
+    assert.equal((await portal(req("POST"))).status, 200);
+  } finally {
+    process.env.STRIPE_PORTAL_CONFIGURATION_ID = "bpc_qa";
     globalThis.fetch = realFetch;
   }
 });

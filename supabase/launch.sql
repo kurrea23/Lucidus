@@ -1,4 +1,11 @@
 -- Apply to a new Supabase project. Legacy schema.sql is a demo reference only.
+-- Supabase's optional automatic-RLS event trigger remains owned by postgres.
+-- Its helper must not become a browser-callable privileged RPC.
+do $$ begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+  end if;
+end $$;
 create table if not exists public.tripcooker_state (
   user_id uuid primary key references auth.users(id) on delete cascade,
   data jsonb not null,

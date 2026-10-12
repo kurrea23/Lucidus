@@ -196,6 +196,9 @@ export default function PremiumPage() {
                 ? "Subscriptions renew automatically. Cancel through Manage billing. Your access continues until the paid period ends. Taxes, if applicable, are shown at checkout."
                 : "Demo preview only. No card, subscription, or payment."}
             </p>
+            <p className="mt-3 text-xs text-ocean-200">
+              Read the <Link href="/terms" className="underline">Terms</Link>, <Link href="/privacy" className="underline">Privacy policy</Link>, and <Link href="/refunds" className="underline">Cancellation & refunds</Link> before subscribing.
+            </p>
           </Card>
         </div>
         <p className="mx-auto mt-6 max-w-3xl text-center text-sm text-charcoal-500">

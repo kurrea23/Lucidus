@@ -9,7 +9,12 @@
     "lint": "eslint",
     "test": "node --import tsx --test tests/*.test.ts tests/*.test.mts && node --conditions=react-server --import tsx --test tests/server/*.test.mts",
     "check:launch": "node --env-file-if-exists=.env.local scripts/check-launch.mjs",
-    "prebuild": "node scripts/prebuild.mjs"
+    "prebuild": "node scripts/prebuild.mjs",
+    "backup:key": "node --env-file-if-exists=.env.backup.local scripts/database-backup.mjs key",
+    "backup:database": "node --env-file-if-exists=.env.backup.local scripts/database-backup.mjs create",
+    "backup:restore": "node --env-file-if-exists=.env.backup.local scripts/database-backup.mjs restore",
+    "backup:prune": "node --env-file-if-exists=.env.backup.local scripts/database-backup.mjs prune",
+    "test:backup": "node --import tsx --test tests/integration/backup.test.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
